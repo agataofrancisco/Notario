@@ -1,0 +1,36 @@
+# Binários
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+notario-backend
+
+# Ficheiros de teste
+*.test
+*.out
+
+# Dependências
+vendor/
+
+# Variáveis de ambiente
+.env
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporários
+tmp/
+temp/
