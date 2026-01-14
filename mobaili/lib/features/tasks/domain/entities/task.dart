@@ -1,5 +1,3 @@
-import 'package:equatable/equatable.dart';
-
 enum Prioridade {
   baixa,
   media,
@@ -15,11 +13,17 @@ enum Prioridade {
         return 'Alta';
     }
   }
+
+  String toJson() => name;
+
+  static Prioridade fromJson(String value) {
+    return Prioridade.values.firstWhere((e) => e.name == value);
+  }
 }
 
 enum EstadoTarefa {
   pendente,
-  emExecucao,
+  em_execucao,
   concluida,
   pulada,
   cancelada;
@@ -28,7 +32,7 @@ enum EstadoTarefa {
     switch (this) {
       case EstadoTarefa.pendente:
         return 'Pendente';
-      case EstadoTarefa.emExecucao:
+      case EstadoTarefa.em_execucao:
         return 'Em Execução';
       case EstadoTarefa.concluida:
         return 'Concluída';
@@ -38,9 +42,28 @@ enum EstadoTarefa {
         return 'Cancelada';
     }
   }
+
+  String toJson() => name;
+
+  static EstadoTarefa fromJson(String value) {
+    return EstadoTarefa.values.firstWhere((e) => e.name == value);
+  }
 }
 
-class Task extends Equatable {
+enum SyncStatus {
+  synced,
+  pending,
+  syncing,
+  conflict;
+
+  String toJson() => name;
+
+  static SyncStatus fromJson(String value) {
+    return SyncStatus.values.firstWhere((e) => e.name == value);
+  }
+}
+
+class Task {
   final String id;
   final String userId;
   final String? googleEventId;
@@ -59,8 +82,9 @@ class Task extends Equatable {
   final DateTime criadoEm;
   final DateTime atualizadoEm;
   final DateTime? concluidoEm;
+  final SyncStatus syncStatus;
 
-  const Task({
+  Task({
     required this.id,
     required this.userId,
     this.googleEventId,
@@ -70,7 +94,7 @@ class Task extends Equatable {
     required this.dataFim,
     required this.duracaoMinutos,
     required this.prioridade,
-    this.avisoAntesMinutos = 15,
+    this.avisoAntesMinutos = 10,
     this.avisoDepoisMinutos = 5,
     this.estado = EstadoTarefa.pendente,
     this.tempoRealMinutos,
@@ -79,29 +103,107 @@ class Task extends Equatable {
     required this.criadoEm,
     required this.atualizadoEm,
     this.concluidoEm,
+    this.syncStatus = SyncStatus.synced,
   });
 
-  @override
-  List<Object?> get props => [
-        id,
-        userId,
-        googleEventId,
-        titulo,
-        descricao,
-        dataInicio,
-        dataFim,
-        duracaoMinutos,
-        prioridade,
-        avisoAntesMinutos,
-        avisoDepoisMinutos,
-        estado,
-        tempoRealMinutos,
-        sincronizado,
-        versao,
-        criadoEm,
-        atualizadoEm,
-        concluidoEm,
-      ];
+  factory Task.fromJson(Map<String, dynamic> json) {
+    return Task(
+      id: json['id'],
+      userId: json['user_id'],
+      googleEventId: json['google_event_id'],
+      titulo: json['titulo'],
+      descricao: json['descricao'],
+      dataInicio: DateTime.parse(json['data_inicio']),
+      dataFim: DateTime.parse(json['data_fim']),
+      duracaoMinutos: json['duracao_minutos'],
+      prioridade: Prioridade.fromJson(json['prioridade']),
+      avisoAntesMinutos: json['aviso_antes_minutos'] ?? 10,
+      avisoDepoisMinutos: json['aviso_depois_minutos'] ?? 5,
+      estado: EstadoTarefa.fromJson(json['estado'] ?? 'pendente'),
+      tempoRealMinutos: json['tempo_real_minutos'],
+      sincronizado: json['sincronizado'] ?? false,
+      versao: json['versao'] ?? 1,
+      criadoEm: DateTime.parse(json['criado_em']),
+      atualizadoEm: DateTime.parse(json['atualizado_em']),
+      concluidoEm: json['concluido_em'] != null
+          ? DateTime.parse(json['concluido_em'])
+          : null,
+      syncStatus: SyncStatus.synced,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'user_id': userId,
+      'google_event_id': googleEventId,
+      'titulo': titulo,
+      'descricao': descricao,
+      'data_inicio': dataInicio.toIso8601String(),
+      'data_fim': dataFim.toIso8601String(),
+      'duracao_minutos': duracaoMinutos,
+      'prioridade': prioridade.toJson(),
+      'aviso_antes_minutos': avisoAntesMinutos,
+      'aviso_depois_minutos': avisoDepoisMinutos,
+      'estado': estado.toJson(),
+      'tempo_real_minutos': tempoRealMinutos,
+      'sincronizado': sincronizado,
+      'versao': versao,
+      'criado_em': criadoEm.toIso8601String(),
+      'atualizado_em': atualizadoEm.toIso8601String(),
+      'concluido_em': concluidoEm?.toIso8601String(),
+    };
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'user_id': userId,
+      'google_event_id': googleEventId,
+      'titulo': titulo,
+      'descricao': descricao,
+      'data_inicio': dataInicio.toIso8601String(),
+      'data_fim': dataFim.toIso8601String(),
+      'duracao_minutos': duracaoMinutos,
+      'prioridade': prioridade.toJson(),
+      'aviso_antes_minutos': avisoAntesMinutos,
+      'aviso_depois_minutos': avisoDepoisMinutos,
+      'estado': estado.toJson(),
+      'tempo_real_minutos': tempoRealMinutos,
+      'sincronizado': sincronizado ? 1 : 0,
+      'versao': versao,
+      'criado_em': criadoEm.toIso8601String(),
+      'atualizado_em': atualizadoEm.toIso8601String(),
+      'concluido_em': concluidoEm?.toIso8601String(),
+      'sync_status': syncStatus.toJson(),
+    };
+  }
+
+  factory Task.fromMap(Map<String, dynamic> map) {
+    return Task(
+      id: map['id'],
+      userId: map['user_id'],
+      googleEventId: map['google_event_id'],
+      titulo: map['titulo'],
+      descricao: map['descricao'],
+      dataInicio: DateTime.parse(map['data_inicio']),
+      dataFim: DateTime.parse(map['data_fim']),
+      duracaoMinutos: map['duracao_minutos'],
+      prioridade: Prioridade.fromJson(map['prioridade']),
+      avisoAntesMinutos: map['aviso_antes_minutos'] ?? 10,
+      avisoDepoisMinutos: map['aviso_depois_minutos'] ?? 5,
+      estado: EstadoTarefa.fromJson(map['estado'] ?? 'pendente'),
+      tempoRealMinutos: map['tempo_real_minutos'],
+      sincronizado: map['sincronizado'] == 1,
+      versao: map['versao'] ?? 1,
+      criadoEm: DateTime.parse(map['criado_em']),
+      atualizadoEm: DateTime.parse(map['atualizado_em']),
+      concluidoEm: map['concluido_em'] != null
+          ? DateTime.parse(map['concluido_em'])
+          : null,
+      syncStatus: SyncStatus.fromJson(map['sync_status'] ?? 'synced'),
+    );
+  }
 
   Task copyWith({
     String? id,
@@ -122,6 +224,7 @@ class Task extends Equatable {
     DateTime? criadoEm,
     DateTime? atualizadoEm,
     DateTime? concluidoEm,
+    SyncStatus? syncStatus,
   }) {
     return Task(
       id: id ?? this.id,
@@ -142,54 +245,25 @@ class Task extends Equatable {
       criadoEm: criadoEm ?? this.criadoEm,
       atualizadoEm: atualizadoEm ?? this.atualizadoEm,
       concluidoEm: concluidoEm ?? this.concluidoEm,
+      syncStatus: syncStatus ?? this.syncStatus,
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'user_id': userId,
-      'google_event_id': googleEventId,
-      'titulo': titulo,
-      'descricao': descricao,
-      'data_inicio': dataInicio.toIso8601String(),
-      'data_fim': dataFim.toIso8601String(),
-      'duracao_minutos': duracaoMinutos,
-      'prioridade': prioridade.name,
-      'aviso_antes_minutos': avisoAntesMinutos,
-      'aviso_depois_minutos': avisoDepoisMinutos,
-      'estado': estado.name,
-      'tempo_real_minutos': tempoRealMinutos,
-      'sincronizado': sincronizado ? 1 : 0,
-      'versao': versao,
-      'criado_em': criadoEm.toIso8601String(),
-      'atualizado_em': atualizadoEm.toIso8601String(),
-      'concluido_em': concluidoEm?.toIso8601String(),
-    };
+  bool get isPendente => estado == EstadoTarefa.pendente;
+  bool get isEmExecucao => estado == EstadoTarefa.em_execucao;
+  bool get isConcluida => estado == EstadoTarefa.concluida;
+  bool get isPulada => estado == EstadoTarefa.pulada;
+  bool get isCancelada => estado == EstadoTarefa.cancelada;
+
+  bool get isAtrasada {
+    if (estado != EstadoTarefa.pendente) return false;
+    return DateTime.now().isAfter(dataInicio);
   }
 
-  factory Task.fromJson(Map<String, dynamic> json) {
-    return Task(
-      id: json['id'] as String,
-      userId: json['user_id'] as String,
-      googleEventId: json['google_event_id'] as String?,
-      titulo: json['titulo'] as String,
-      descricao: json['descricao'] as String?,
-      dataInicio: DateTime.parse(json['data_inicio'] as String),
-      dataFim: DateTime.parse(json['data_fim'] as String),
-      duracaoMinutos: json['duracao_minutos'] as int,
-      prioridade: Prioridade.values.byName(json['prioridade'] as String),
-      avisoAntesMinutos: json['aviso_antes_minutos'] as int? ?? 15,
-      avisoDepoisMinutos: json['aviso_depois_minutos'] as int? ?? 5,
-      estado: EstadoTarefa.values.byName(json['estado'] as String),
-      tempoRealMinutos: json['tempo_real_minutos'] as int?,
-      sincronizado: (json['sincronizado'] as int?) == 1,
-      versao: json['versao'] as int? ?? 1,
-      criadoEm: DateTime.parse(json['criado_em'] as String),
-      atualizadoEm: DateTime.parse(json['atualizado_em'] as String),
-      concluidoEm: json['concluido_em'] != null
-          ? DateTime.parse(json['concluido_em'] as String)
-          : null,
-    );
+  Duration get duracaoRestante {
+    if (estado != EstadoTarefa.em_execucao) return Duration.zero;
+    final agora = DateTime.now();
+    if (agora.isAfter(dataFim)) return Duration.zero;
+    return dataFim.difference(agora);
   }
 }

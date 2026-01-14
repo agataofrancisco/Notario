@@ -1,29 +1,33 @@
 class AppConfig {
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:8080/api/v1',
+    defaultValue: 'http://localhost:8080/api',
   );
 
-  static const String googleClientId = String.fromEnvironment(
-    'GOOGLE_CLIENT_ID',
-    defaultValue: '',
-  );
+  static const String appName = 'NOTÁRIO';
+  static const String appVersion = '1.0.0';
 
-  static const bool isProduction = bool.fromEnvironment(
-    'PRODUCTION',
-    defaultValue: false,
-  );
+  // Tempo de timeout para requisições HTTP (em segundos)
+  static const int httpTimeout = 30;
+
+  // Intervalo de sincronização automática (em minutos)
+  static const int syncIntervalMinutes = 15;
+
+  // Horário de trabalho (8h-22h)
+  static const int workStartHour = 8;
+  static const int workEndHour = 22;
+  static const int workHoursPerDay = 14;
+  static const int workMinutesPerDay = 840;
+
+  // Margem de segurança para agendamento (10%)
+  static const double scheduleSafetyMargin = 1.1;
 
   // Configurações de notificações
-  static const int avisoAntesPadraoMinutos = 15;
-  static const int avisoDepoisPadraoMinutos = 5;
+  static const int defaultReminderBeforeMinutes = 10;
+  static const int defaultReminderAfterMinutes = 5;
 
-  // Configurações de tempo
-  static const int horaInicioDia = 8; // 8h
-  static const int horaFimDia = 22; // 22h
-  static const int duracaoMaximaTarefaMinutos = 480; // 8h
-
-  // Configurações de sincronização
-  static const int intervaloSincronizacaoSegundos = 300; // 5 minutos
-  static const int maxTentativasSincronizacao = 3;
+  // Configurações de cache
+  static const String userCacheKey = 'cached_user';
+  static const String tokenCacheKey = 'jwt_token';
+  static const String lastSyncKey = 'last_sync_time';
 }

@@ -2,12 +2,11 @@ package main
 
 import (
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
 
+	"github.com/agataofrancisco/notario/internal/api"
 	"github.com/agataofrancisco/notario/internal/config"
 	"github.com/agataofrancisco/notario/pkg/database"
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -32,14 +31,39 @@ func main() {
 		log.Fatalf("❌ Erro ao inicializar schema: %v", err)
 	}
 
-	// TODO: Inicializar router e handlers
+	// Configurar Gin
+	if cfg.Server.Environment == "production" {
+		gin.SetMode(gin.ReleaseMode)
+	}
 
-	log.Printf("✅ Servidor rodando na porta %s", cfg.Server.Port)
+	router := gin.Default()
 
-	// Aguardar sinal de encerramento
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	// Configurar CORS
+	router.Use(corsMiddleware())
 
-	log.Println("🛑 Encerrando servidor...")
+	// Configurar rotas
+	api.SetupRoutes(router, cfg.JWT.Secret)
+
+	// Iniciar servidor
+	log.Printf("✅ Servidor NOTÁRIO rodando na porta %s", cfg.Server.Port)
+	if err := router.Run(":" + cfg.Server.Port); err != nil {
+		log.Fatalf("❌ Erro ao iniciar servidor: %v", err)
+	}
+}
+
+// corsMiddleware configura CORS
+func corsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	}
 }
