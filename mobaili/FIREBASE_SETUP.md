@@ -1,197 +1,128 @@
-# NOTÁRIO - Configuração Firebase ✅
+# Configuração do Firebase - NOTÁRIO
 
-## ✅ O Que Já Está Configurado
+## 🔥 Passo a Passo
 
-### 1. Ficheiros de Configuração
+### 1. Instalar Firebase CLI
 
-- ✅ `android/app/google-services.json` - Movido para local correto
-- ✅ `ios/Runner/GoogleService-Info.plist` - Movido para local correto
+```bash
+# Instalar Firebase CLI globalmente
+npm install -g firebase-tools
 
-### 2. Android
-
-- ✅ `android/build.gradle` - Google Services plugin adicionado
-- ✅ `android/app/build.gradle` - Plugin aplicado + minSdk 21
-- ✅ MultiDex ativado
-
-### 3. Dependências Flutter
-
-- ✅ `firebase_core` - Core do Firebase
-- ✅ `firebase_auth` - Autenticação
-- ✅ `firebase_messaging` - Notificações push
-- ✅ `firebase_analytics` - Analytics
-- ✅ `firebase_crashlytics` - Crash reporting
-- ✅ `google_sign_in` - Login com Google
-
-### 4. Código
-
-- ✅ `lib/main.dart` - Inicialização do Firebase
-- ✅ `lib/core/services/auth_service.dart` - Serviço de autenticação
-- ✅ `lib/firebase_options.dart` - Configurações (precisa atualizar valores)
-
----
-
-## ⚠️ PRÓXIMOS PASSOS OBRIGATÓRIOS
-
-### 1. Atualizar `firebase_options.dart`
-
-Precisas extrair os valores do `google-services.json` e `GoogleService-Info.plist`:
-
-#### Do `google-services.json` (Android):
-
-```json
-{
-  "project_info": {
-    "project_id": "...", // Copiar para projectId
-    "storage_bucket": "..." // Copiar para storageBucket
-  },
-  "client": [
-    {
-      "client_info": {
-        "mobilesdk_app_id": "..." // Copiar para appId (Android)
-      },
-      "api_key": [
-        {
-          "current_key": "..." // Copiar para apiKey (Android)
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "..." // Sender ID
-            }
-          ]
-        }
-      }
-    }
-  ]
-}
+# Ou usando curl (Windows PowerShell como Admin)
+irm https://firebase.tools/bin/win/instant/latest -OutFile firebase-tools.exe
 ```
 
-#### Do `GoogleService-Info.plist` (iOS):
+### 2. Login no Firebase
 
-```xml
-<key>API_KEY</key>
-<string>...</string>  <!-- Copiar para apiKey (iOS) -->
-
-<key>GOOGLE_APP_ID</key>
-<string>...</string>  <!-- Copiar para appId (iOS) -->
+```bash
+firebase login
 ```
 
-### 2. Executar `flutter pub get`
+### 3. Instalar FlutterFire CLI
+
+```bash
+dart pub global activate flutterfire_cli
+```
+
+### 4. Configurar Firebase no Projeto
+
+**Execute este comando na pasta `mobaili`:**
 
 ```bash
 cd mobaili
+flutterfire configure
+```
+
+Isso vai:
+
+- ✅ Criar `firebase_options.dart` automaticamente
+- ✅ Configurar Android
+- ✅ Configurar iOS
+- ✅ Configurar Web
+
+### 5. Selecionar o Projeto
+
+Quando perguntado, seleciona: **`notario-6961f`**
+
+### 6. Selecionar Plataformas
+
+Seleciona:
+
+- ✅ Android
+- ✅ iOS (se tiveres Mac)
+- ⬜ Web (opcional)
+
+---
+
+## 📝 Alternativa Manual (se FlutterFire não funcionar)
+
+Se o comando `flutterfire configure` não funcionar, podes criar o ficheiro manualmente:
+
+### 1. Ir ao Firebase Console
+
+https://console.firebase.google.com/project/notario-6961f/settings/general
+
+### 2. Adicionar Apps
+
+- Adicionar app Android
+- Adicionar app iOS (opcional)
+
+### 3. Copiar as configurações
+
+Depois de adicionar as apps, o Firebase vai gerar as configurações que precisas copiar para `firebase_options.dart`.
+
+---
+
+## ✅ Verificar Configuração
+
+Depois de executar `flutterfire configure`, deves ter:
+
+```
+mobaili/
+├── lib/
+│   └── firebase_options.dart  ← NOVO!
+├── android/
+│   └── app/
+│       └── google-services.json  ← NOVO!
+└── ios/
+    └── Runner/
+        └── GoogleService-Info.plist  ← NOVO!
+```
+
+---
+
+## 🚀 Próximo Passo
+
+Depois de configurar, executa:
+
+```bash
 flutter pub get
-```
-
-### 3. Configurar iOS (Podfile)
-
-Editar `ios/Podfile` e adicionar no topo:
-
-```ruby
-platform :ios, '13.0'  # Firebase requer iOS 13+
-```
-
-### 4. Instalar Pods (iOS)
-
-```bash
-cd ios
-pod install
-```
-
----
-
-## 🔐 Configuração Google Sign-In
-
-### Android
-
-Já está configurado automaticamente pelo `google-services.json` ✅
-
-### iOS
-
-Precisas adicionar o **URL Scheme** ao `Info.plist`:
-
-1. Abrir `GoogleService-Info.plist`
-2. Copiar o valor de `REVERSED_CLIENT_ID`
-3. Adicionar ao `ios/Runner/Info.plist`:
-
-```xml
-<key>CFBundleURLTypes</key>
-<array>
-    <dict>
-        <key>CFBundleTypeRole</key>
-        <string>Editor</string>
-        <key>CFBundleURLSchemes</key>
-        <array>
-            <string>COLE_AQUI_O_REVERSED_CLIENT_ID</string>
-        </array>
-    </dict>
-</array>
-```
-
----
-
-## 🧪 Testar
-
-### 1. Executar o App
-
-```bash
 flutter run
 ```
 
-### 2. Testar Login
+---
 
-```dart
-// No teu código
-final authService = AuthService();
-final user = await authService.signInWithGoogle();
-print('Utilizador: ${user.nome}');
+## ⚠️ Problemas Comuns
+
+### "Firebase CLI não encontrado"
+
+```bash
+# Adicionar ao PATH (Windows)
+# Procurar por "firebase-tools.exe" e adicionar a pasta ao PATH do sistema
 ```
 
----
+### "FlutterFire CLI não encontrado"
 
-## 📝 Ficheiros Criados/Modificados
+```bash
+# Adicionar Dart pub global ao PATH
+# Adicionar: %USERPROFILE%\AppData\Local\Pub\Cache\bin
+```
 
-### Criados:
+### "Projeto não encontrado"
 
-- `lib/firebase_options.dart`
-- `lib/core/services/auth_service.dart`
+Certifica-te que estás logado na conta correta:
 
-### Modificados:
-
-- `pubspec.yaml`
-- `lib/main.dart`
-- `android/build.gradle`
-- `android/app/build.gradle`
-
-### Movidos:
-
-- `google-services.json` → `android/app/`
-- `GoogleService-Info.plist` → `ios/Runner/`
-
----
-
-## ❓ Dúvidas Comuns
-
-### "Firebase não inicializa"
-
-- Verificar se `firebase_options.dart` tem os valores corretos
-- Verificar se `google-services.json` está em `android/app/`
-
-### "Google Sign-In não funciona no iOS"
-
-- Verificar se adicionaste o `REVERSED_CLIENT_ID` ao `Info.plist`
-- Verificar se `GoogleService-Info.plist` está em `ios/Runner/`
-
-### "Erro de build no Android"
-
-- Executar `flutter clean`
-- Executar `flutter pub get`
-- Rebuild
-
----
-
-## 🎯 Próximo: Implementar UI de Login
-
-Queres que eu crie a tela de login com o botão "Entrar com Google"?
+```bash
+firebase logout
+firebase login
+```

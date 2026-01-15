@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import '../../../auth/presentation/bloc/auth_bloc.dart';
-import '../../../auth/presentation/bloc/auth_event.dart';
-import '../../../auth/presentation/bloc/auth_state.dart';
+import '../../../tasks/presentation/bloc/task_bloc.dart';
+import '../../../tasks/domain/entities/task.dart';
+import '../../../tasks/presentation/screens/task_form_screen.dart';
+import '../../../../core/services/auth_service.dart';
+import '../../../auth/presentation/screens/login_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -13,6 +15,25 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  DateTime _selectedDate = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTasks();
+  }
+
+  void _loadTasks() {
+    final authService = context.read<AuthService>();
+    final user = authService.currentUser;
+    if (user != null) {
+      context.read<TaskBloc>().add(TaskDayLoadRequested(
+            user.id,
+            _selectedDate,
+          ));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -20,92 +41,81 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: const Text('NOTÁRIO'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {
-              // TODO: Mostrar notificações
-            },
-          ),
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'logout') {
-                context.read<AuthBloc>().add(AuthLogoutRequested());
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await context.read<AuthService>().signOut();
+              if (context.mounted) {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                );
               }
             },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'profile',
-                child: Row(
-                  children: [
-                    Icon(Icons.person_outline),
-                    SizedBox(width: 12),
-                    Text('Perfil'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'settings',
-                child: Row(
-                  children: [
-                    Icon(Icons.settings_outlined),
-                    SizedBox(width: 12),
-                    Text('Configurações'),
-                  ],
-                ),
-              ),
-              const PopupMenuDivider(),
-              const PopupMenuItem(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(Icons.logout, color: Colors.red),
-                    SizedBox(width: 12),
-                    Text('Sair', style: TextStyle(color: Colors.red)),
-                  ],
-                ),
-              ),
-            ],
           ),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () async {
-          // TODO: Sincronizar dados
-          await Future.delayed(const Duration(seconds: 1));
-        },
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header com saudação
-              _buildHeader(),
-              const SizedBox(height: 24),
+        onRefresh: () async => _loadTasks(),
+        child: CustomScrollView(
+          slivers: [
+            // Header com data
+            SliverToBoxAdapter(
+              child: _DateSelector(
+                selectedDate: _selectedDate,
+                onDateChanged: (date) {
+                  setState(() => _selectedDate = date);
+                  _loadTasks();
+                },
+              ),
+            ),
 
-              // Status do dia
-              _buildDayStatus(),
-              const SizedBox(height: 24),
+            // Resumo do dia
+            SliverToBoxAdapter(
+              child: _DaySummary(date: _selectedDate),
+            ),
 
-              // Calendário
-              _buildCalendar(),
-              const SizedBox(height: 24),
+            // Lista de tarefas
+            BlocBuilder<TaskBloc, TaskState>(
+              builder: (context, state) {
+                if (state is TaskLoading) {
+                  return const SliverFillRemaining(
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
 
-              // Tarefas de hoje
-              _buildTodayTasks(),
-              const SizedBox(height: 24),
+                if (state is TaskDayLoaded) {
+                  if (state.tasks.isEmpty) {
+                    return SliverFillRemaining(
+                      child: _EmptyState(date: _selectedDate),
+                    );
+                  }
 
-              // Estatísticas rápidas
-              _buildQuickStats(),
-            ],
-          ),
+                  return SliverPadding(
+                    padding: const EdgeInsets.all(16),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final task = state.tasks[index];
+                          return _TaskCard(task: task);
+                        },
+                        childCount: state.tasks.length,
+                      ),
+                    ),
+                  );
+                }
+
+                return const SliverFillRemaining(
+                  child: Center(child: Text('Erro ao carregar tarefas')),
+                );
+              },
+            ),
+          ],
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          // TODO: Criar nova tarefa
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Criar tarefa - Em desenvolvimento'),
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => TaskFormScreen(date: _selectedDate),
             ),
           );
         },
@@ -114,285 +124,296 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
+}
 
-  Widget _buildHeader() {
-    return BlocBuilder<AuthBloc, AuthState>(
-      builder: (context, state) {
-        final userName = state is AuthAuthenticated
-            ? state.user.nome.split(' ').first
-            : 'Utilizador';
+class _DateSelector extends StatelessWidget {
+  final DateTime selectedDate;
+  final ValueChanged<DateTime> onDateChanged;
 
-        final now = DateTime.now();
-        final hour = now.hour;
-        String greeting;
+  const _DateSelector({
+    required this.selectedDate,
+    required this.onDateChanged,
+  });
 
-        if (hour < 12) {
-          greeting = 'Bom dia';
-        } else if (hour < 18) {
-          greeting = 'Boa tarde';
-        } else {
-          greeting = 'Boa noite';
-        }
+  @override
+  Widget build(BuildContext context) {
+    final isToday = DateUtils.isSameDay(selectedDate, DateTime.now());
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '$greeting, $userName! 👋',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              DateFormat('EEEE, d \'de\' MMMM \'de\' y', 'pt_PT').format(now),
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.grey[600],
-                  ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildDayStatus() {
-    // TODO: Calcular status real baseado nas tarefas
-    const tasksCompleted = 3;
-    const tasksTotal = 5;
-    final isOnTime = tasksCompleted >= tasksTotal;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isOnTime ? Colors.green[50] : Colors.red[50],
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                isOnTime ? Icons.check_circle : Icons.warning,
-                color: isOnTime ? Colors.green : Colors.red,
-                size: 32,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            onPressed: () {
+              onDateChanged(selectedDate.subtract(const Duration(days: 1)));
+            },
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: selectedDate,
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2030),
+                );
+                if (date != null) onDateChanged(date);
+              },
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    isOnTime ? 'Está em dia!' : 'Está atrasado',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: isOnTime ? Colors.green : Colors.red,
-                        ),
+                    isToday
+                        ? 'Hoje'
+                        : DateFormat('EEEE', 'pt_PT').format(selectedDate),
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  const SizedBox(height: 4),
                   Text(
-                    '$tasksCompleted de $tasksTotal tarefas concluídas',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.grey[600],
+                    DateFormat('d MMMM yyyy', 'pt_PT').format(selectedDate),
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
                         ),
                   ),
                 ],
               ),
             ),
-            CircularProgressIndicator(
-              value: tasksCompleted / tasksTotal,
-              backgroundColor: Colors.grey[200],
-              valueColor: AlwaysStoppedAnimation<Color>(
-                isOnTime ? Colors.green : Colors.orange,
-              ),
-            ),
-          ],
-        ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right),
+            onPressed: () {
+              onDateChanged(selectedDate.add(const Duration(days: 1)));
+            },
+          ),
+        ],
       ),
     );
   }
+}
 
-  Widget _buildCalendar() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Calendário',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 16),
-            // TODO: Implementar calendário completo
-            const Center(
-              child: Text(
-                'Calendário em desenvolvimento',
-                style: TextStyle(color: Colors.grey),
+class _DaySummary extends StatelessWidget {
+  final DateTime date;
+
+  const _DaySummary({required this.date});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<TaskBloc, TaskState>(
+      builder: (context, state) {
+        if (state is! TaskDayLoaded) return const SizedBox.shrink();
+
+        final tasks = state.tasks;
+        final concluidas = tasks.where((t) => t.isConcluida).length;
+        final pendentes = tasks.where((t) => t.isPendente).length;
+        final emExecucao = tasks.where((t) => t.isEmExecucao).length;
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceVariant,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _SummaryItem(
+                icon: Icons.check_circle,
+                label: 'Concluídas',
+                value: concluidas.toString(),
+                color: Colors.green,
               ),
-            ),
-          ],
-        ),
-      ),
+              _SummaryItem(
+                icon: Icons.pending,
+                label: 'Pendentes',
+                value: pendentes.toString(),
+                color: Colors.orange,
+              ),
+              _SummaryItem(
+                icon: Icons.play_circle,
+                label: 'Em Execução',
+                value: emExecucao.toString(),
+                color: Colors.blue,
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
+}
 
-  Widget _buildTodayTasks() {
-    // TODO: Buscar tarefas reais do banco de dados
+class _SummaryItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  const _SummaryItem({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Tarefas de Hoje',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            TextButton(
-              onPressed: () {
-                // TODO: Ver todas as tarefas
-              },
-              child: const Text('Ver todas'),
-            ),
-          ],
+        Icon(icon, color: color, size: 32),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
         ),
-        const SizedBox(height: 12),
-        _buildTaskCard(
-          'Reunião com equipa',
-          '10:00 - 11:00',
-          'alta',
-          false,
-        ),
-        const SizedBox(height: 8),
-        _buildTaskCard(
-          'Revisar código',
-          '14:00 - 15:30',
-          'media',
-          true,
-        ),
-        const SizedBox(height: 8),
-        _buildTaskCard(
-          'Responder emails',
-          '16:00 - 16:30',
-          'baixa',
-          false,
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall,
         ),
       ],
     );
   }
+}
 
-  Widget _buildTaskCard(
-    String title,
-    String time,
-    String priority,
-    bool completed,
-  ) {
-    Color priorityColor;
-    switch (priority) {
-      case 'alta':
-        priorityColor = Colors.red;
-        break;
-      case 'media':
-        priorityColor = Colors.orange;
-        break;
-      default:
-        priorityColor = Colors.green;
-    }
+class _TaskCard extends StatelessWidget {
+  final Task task;
 
+  const _TaskCard({required this.task});
+
+  @override
+  Widget build(BuildContext context) {
     return Card(
+      margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
-        leading: Container(
-          width: 4,
-          decoration: BoxDecoration(
-            color: priorityColor,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
+        leading: _PriorityIndicator(prioridade: task.prioridade),
         title: Text(
-          title,
+          task.titulo,
           style: TextStyle(
-            decoration: completed ? TextDecoration.lineThrough : null,
-            color: completed ? Colors.grey : null,
+            decoration: task.isConcluida ? TextDecoration.lineThrough : null,
           ),
         ),
-        subtitle: Row(
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.access_time, size: 14, color: Colors.grey[600]),
-            const SizedBox(width: 4),
-            Text(time),
+            Text(DateFormat('HH:mm').format(task.dataInicio)),
+            if (task.descricao != null && task.descricao!.isNotEmpty)
+              Text(
+                task.descricao!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
           ],
         ),
-        trailing: Checkbox(
-          value: completed,
-          onChanged: (value) {
-            // TODO: Marcar como concluída
-          },
-        ),
+        trailing: _EstadoChip(estado: task.estado),
         onTap: () {
-          // TODO: Ver detalhes da tarefa
+          // TODO: Navegar para detalhes da tarefa
         },
       ),
     );
   }
+}
 
-  Widget _buildQuickStats() {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildStatCard(
-            'Pontuação',
-            '85',
-            Icons.star,
-            Colors.amber,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildStatCard(
-            'Sequência',
-            '7 dias',
-            Icons.local_fire_department,
-            Colors.orange,
-          ),
-        ),
-      ],
+class _PriorityIndicator extends StatelessWidget {
+  final Prioridade prioridade;
+
+  const _PriorityIndicator({required this.prioridade});
+
+  @override
+  Widget build(BuildContext context) {
+    Color color;
+    switch (prioridade) {
+      case Prioridade.alta:
+        color = Colors.red;
+        break;
+      case Prioridade.media:
+        color = Colors.orange;
+        break;
+      case Prioridade.baixa:
+        color = Colors.green;
+        break;
+    }
+
+    return Container(
+      width: 4,
+      height: 40,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(2),
+      ),
     );
   }
+}
 
-  Widget _buildStatCard(
-    String label,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 32),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.grey[600],
-                  ),
-            ),
-          ],
-        ),
+class _EstadoChip extends StatelessWidget {
+  final EstadoTarefa estado;
+
+  const _EstadoChip({required this.estado});
+
+  @override
+  Widget build(BuildContext context) {
+    Color color;
+    IconData icon;
+
+    switch (estado) {
+      case EstadoTarefa.pendente:
+        color = Colors.orange;
+        icon = Icons.pending;
+        break;
+      case EstadoTarefa.emExecucao:
+        color = Colors.blue;
+        icon = Icons.play_circle;
+        break;
+      case EstadoTarefa.concluida:
+        color = Colors.green;
+        icon = Icons.check_circle;
+        break;
+      case EstadoTarefa.pulada:
+        color = Colors.grey;
+        icon = Icons.skip_next;
+        break;
+      case EstadoTarefa.cancelada:
+        color = Colors.red;
+        icon = Icons.cancel;
+        break;
+    }
+
+    return Icon(icon, color: color);
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final DateTime date;
+
+  const _EmptyState({required this.date});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.event_available,
+            size: 80,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Nenhuma tarefa para este dia',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: Colors.grey[600],
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Toque no botão + para adicionar',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey[500],
+                ),
+          ),
+        ],
       ),
     );
   }

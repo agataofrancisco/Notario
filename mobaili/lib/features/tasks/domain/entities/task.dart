@@ -46,7 +46,8 @@ enum EstadoTarefa {
   String toJson() => name;
 
   static EstadoTarefa fromJson(String value) {
-    return EstadoTarefa.values.firstWhere((e) => e.name == value, orElse: () => EstadoTarefa.pendente);
+    return EstadoTarefa.values.firstWhere((e) => e.name == value,
+        orElse: () => EstadoTarefa.pendente);
   }
 }
 
@@ -107,51 +108,63 @@ class Task {
   });
 
   factory Task.fromJson(Map<String, dynamic> json) {
+    // Suporta tanto Firestore Timestamp quanto String ISO
+    DateTime parseDateTime(dynamic value) {
+      if (value == null) return DateTime.now();
+      if (value is String) return DateTime.parse(value);
+      // Firestore Timestamp
+      return (value as dynamic).toDate();
+    }
+
     return Task(
       id: json['id'],
-      userId: json['user_id'],
-      googleEventId: json['google_event_id'],
+      userId: json['userId'] ?? json['user_id'], // Firestore usa camelCase
+      googleEventId: json['googleEventId'] ?? json['google_event_id'],
       titulo: json['titulo'],
       descricao: json['descricao'],
-      dataInicio: DateTime.parse(json['data_inicio']),
-      dataFim: DateTime.parse(json['data_fim']),
-      duracaoMinutos: json['duracao_minutos'],
+      dataInicio: parseDateTime(json['dataInicio'] ?? json['data_inicio']),
+      dataFim: parseDateTime(json['dataFim'] ?? json['data_fim']),
+      duracaoMinutos: json['duracaoMinutos'] ?? json['duracao_minutos'],
       prioridade: Prioridade.fromJson(json['prioridade']),
-      avisoAntesMinutos: json['aviso_antes_minutos'] ?? 10,
-      avisoDepoisMinutos: json['aviso_depois_minutos'] ?? 5,
+      avisoAntesMinutos:
+          json['avisoAntesMinutos'] ?? json['aviso_antes_minutos'] ?? 10,
+      avisoDepoisMinutos:
+          json['avisoDepoisMinutos'] ?? json['aviso_depois_minutos'] ?? 5,
       estado: EstadoTarefa.fromJson(json['estado'] ?? 'pendente'),
-      tempoRealMinutos: json['tempo_real_minutos'],
+      tempoRealMinutos: json['tempoRealMinutos'] ?? json['tempo_real_minutos'],
       sincronizado: json['sincronizado'] ?? false,
       versao: json['versao'] ?? 1,
-      criadoEm: DateTime.parse(json['criado_em']),
-      atualizadoEm: DateTime.parse(json['atualizado_em']),
-      concluidoEm: json['concluido_em'] != null
-          ? DateTime.parse(json['concluido_em'])
+      criadoEm: parseDateTime(json['criadoEm'] ?? json['criado_em']),
+      atualizadoEm:
+          parseDateTime(json['atualizadoEm'] ?? json['atualizado_em']),
+      concluidoEm: json['concluidoEm'] != null || json['concluido_em'] != null
+          ? parseDateTime(json['concluidoEm'] ?? json['concluido_em'])
           : null,
       syncStatus: SyncStatus.synced,
     );
   }
 
   Map<String, dynamic> toJson() {
+    // Firestore usa camelCase
     return {
       'id': id,
-      'user_id': userId,
-      'google_event_id': googleEventId,
+      'userId': userId,
+      'googleEventId': googleEventId,
       'titulo': titulo,
       'descricao': descricao,
-      'data_inicio': dataInicio.toIso8601String(),
-      'data_fim': dataFim.toIso8601String(),
-      'duracao_minutos': duracaoMinutos,
+      'dataInicio': dataInicio,
+      'dataFim': dataFim,
+      'duracaoMinutos': duracaoMinutos,
       'prioridade': prioridade.toJson(),
-      'aviso_antes_minutos': avisoAntesMinutos,
-      'aviso_depois_minutos': avisoDepoisMinutos,
+      'avisoAntesMinutos': avisoAntesMinutos,
+      'avisoDepoisMinutos': avisoDepoisMinutos,
       'estado': estado.toJson(),
-      'tempo_real_minutos': tempoRealMinutos,
+      'tempoRealMinutos': tempoRealMinutos,
       'sincronizado': sincronizado,
       'versao': versao,
-      'criado_em': criadoEm.toIso8601String(),
-      'atualizado_em': atualizadoEm.toIso8601String(),
-      'concluido_em': concluidoEm?.toIso8601String(),
+      'criadoEm': criadoEm,
+      'atualizadoEm': atualizadoEm,
+      'concluidoEm': concluidoEm,
     };
   }
 
