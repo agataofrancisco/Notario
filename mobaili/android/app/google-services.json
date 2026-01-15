@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:525067357557:android:3ff1c5a390dbc370b4173c",
+        "android_client_info": {
+          "package_name": "com.example.notario"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAGbqYFWEEM6Ehd2w3CnrNVPLDCzkvUp9I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:525067357557:android:dc4f1816e8a6d79db4173c",
         "android_client_info": {
           "package_name": "notario.app"

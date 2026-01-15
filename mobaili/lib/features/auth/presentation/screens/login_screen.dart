@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import '../../domain/entities/user.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
@@ -36,7 +35,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final GoogleSignInAuthentication auth = await account.authentication;
 
-      if (auth.idToken != null && auth.accessToken != null) {
+      if (mounted && auth.idToken != null && auth.accessToken != null) {
         context.read<AuthBloc>().add(
               AuthGoogleLoginRequested(
                 idToken: auth.idToken!,
@@ -45,8 +44,8 @@ class _LoginScreenState extends State<LoginScreen> {
             );
       }
     } catch (error) {
-      setState(() => _isLoading = false);
       if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Erro ao fazer login: $error'),
@@ -98,7 +97,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
+                            color: Colors.black.withAlpha(25), // Adjusted for performance
                             blurRadius: 20,
                             offset: const Offset(0, 10),
                           ),
@@ -216,7 +215,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     TextButton(
                       onPressed: () {
                         context.read<AuthBloc>().add(
-                              AuthGoogleLoginRequested(
+                              const AuthGoogleLoginRequested(
                                 idToken: 'demo-token',
                                 accessToken: 'demo-token',
                               ),

@@ -1,19 +1,31 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'firebase_options.dart';
-import 'app.dart';
-import 'core/di/injection.dart';
+import 'package:notario/firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Inicializar Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  runApp(const MyApp());
+}
 
-  // Configurar injeção de dependências
-  await configureDependencies();
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
-  runApp(const NotarioApp());
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Notário',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+      ),
+      home: const Scaffold(
+        body: Center(
+          child: Text('Firebase Configurado!'),
+        ),
+      ),
+    );
+  }
 }

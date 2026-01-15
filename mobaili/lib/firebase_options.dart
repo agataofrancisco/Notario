@@ -17,10 +17,7 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -28,15 +25,9 @@ class DefaultFirebaseOptions {
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -51,7 +42,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyAGbqYFWEEM6Ehd2w3CnrNVPLDCzkvUp9I',
-    appId: '1:525067357557:android:dc4f1816e8a6d79db4173c',
+    appId: '1:525067357557:android:3ff1c5a390dbc370b4173c',
     messagingSenderId: '525067357557',
     projectId: 'notario-6961f',
     storageBucket: 'notario-6961f.firebasestorage.app',
@@ -59,10 +50,40 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyBGIb7yKSTYww4fcl7QK8D1AEDjnIoQ_vw',
-    appId: '1:525067357557:ios:a2293283ae2f0d8db4173c',
+    appId: '1:525067357557:ios:d0efe4dc9d0fa0a8b4173c',
     messagingSenderId: '525067357557',
     projectId: 'notario-6961f',
     storageBucket: 'notario-6961f.firebasestorage.app',
-    iosBundleId: 'com.notario.app',
+    iosBundleId: 'com.example.notario',
   );
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyAp_RyNjzmRZQDvuvaRW1fUTlcu6-NSMIU',
+    appId: '1:525067357557:web:6a08cf4a02dee9f3b4173c',
+    messagingSenderId: '525067357557',
+    projectId: 'notario-6961f',
+    authDomain: 'notario-6961f.firebaseapp.com',
+    storageBucket: 'notario-6961f.firebasestorage.app',
+    measurementId: 'G-83578D858F',
+  );
+
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyBGIb7yKSTYww4fcl7QK8D1AEDjnIoQ_vw',
+    appId: '1:525067357557:ios:d0efe4dc9d0fa0a8b4173c',
+    messagingSenderId: '525067357557',
+    projectId: 'notario-6961f',
+    storageBucket: 'notario-6961f.firebasestorage.app',
+    iosBundleId: 'com.example.notario',
+  );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyAp_RyNjzmRZQDvuvaRW1fUTlcu6-NSMIU',
+    appId: '1:525067357557:web:95cffb8f1d081908b4173c',
+    messagingSenderId: '525067357557',
+    projectId: 'notario-6961f',
+    authDomain: 'notario-6961f.firebaseapp.com',
+    storageBucket: 'notario-6961f.firebasestorage.app',
+    measurementId: 'G-8FTQ0KXH1R',
+  );
+
 }

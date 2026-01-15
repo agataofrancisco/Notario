@@ -23,7 +23,7 @@ enum Prioridade {
 
 enum EstadoTarefa {
   pendente,
-  em_execucao,
+  emExecucao,
   concluida,
   pulada,
   cancelada;
@@ -32,7 +32,7 @@ enum EstadoTarefa {
     switch (this) {
       case EstadoTarefa.pendente:
         return 'Pendente';
-      case EstadoTarefa.em_execucao:
+      case EstadoTarefa.emExecucao:
         return 'Em Execução';
       case EstadoTarefa.concluida:
         return 'Concluída';
@@ -46,7 +46,7 @@ enum EstadoTarefa {
   String toJson() => name;
 
   static EstadoTarefa fromJson(String value) {
-    return EstadoTarefa.values.firstWhere((e) => e.name == value);
+    return EstadoTarefa.values.firstWhere((e) => e.name == value, orElse: () => EstadoTarefa.pendente);
   }
 }
 
@@ -250,7 +250,7 @@ class Task {
   }
 
   bool get isPendente => estado == EstadoTarefa.pendente;
-  bool get isEmExecucao => estado == EstadoTarefa.em_execucao;
+  bool get isEmExecucao => estado == EstadoTarefa.emExecucao;
   bool get isConcluida => estado == EstadoTarefa.concluida;
   bool get isPulada => estado == EstadoTarefa.pulada;
   bool get isCancelada => estado == EstadoTarefa.cancelada;
@@ -261,7 +261,7 @@ class Task {
   }
 
   Duration get duracaoRestante {
-    if (estado != EstadoTarefa.em_execucao) return Duration.zero;
+    if (estado != EstadoTarefa.emExecucao) return Duration.zero;
     final agora = DateTime.now();
     if (agora.isAfter(dataFim)) return Duration.zero;
     return dataFim.difference(agora);

@@ -1,4 +1,4 @@
-# NOTÁRIO Mobile
+# NOTÁRIO - Mobile
 
 Aplicação mobile Flutter para o sistema NOTÁRIO - Motor de disciplina para gestão de tempo.
 
@@ -6,13 +6,19 @@ Aplicação mobile Flutter para o sistema NOTÁRIO - Motor de disciplina para ge
 
 - **Flutter 3.0+**
 - **Dart 3.0+**
-- **SQLite** (base de dados local)
+- **Firebase** (Backend as a Service)
+  - **Firebase Authentication** (para login com Google)
+  - **Cloud Firestore** (base de dados NoSQL em tempo real)
+  - **Firebase Cloud Messaging** (para notificações e lembretes)
 - **BLoC** (gestão de estado)
-- **Google Sign-In**
 - **Google Calendar API**
-- **Flutter Local Notifications**
+- **Google Sign-In**
+- **Table Calendar** (para visualização de eventos)
+- **Intl** (para formatação de datas)
 
 ## 📁 Estrutura do Projeto
+
+O projeto segue uma arquitetura limpa, orientada a funcionalidades e escalável.
 
 ```
 mobile/
@@ -21,60 +27,28 @@ mobile/
 │   ├── app.dart
 │   ├── core/
 │   │   ├── config/
-│   │   ├── database/
 │   │   ├── di/
-│   │   ├── network/
 │   │   └── services/
 │   ├── features/
 │   │   ├── auth/
-│   │   ├── dashboard/
-│   │   ├── tasks/
-│   │   ├── notes/
-│   │   ├── execution/
-│   │   └── statistics/
+│   │   │   ├── bloc/
+│   │   │   ├── models/
+│   │   │   ├── presentation/
+│   │   │   └── repository/
+│   │   ├── calendar/
+│   │   └── notes/
 │   └── shared/
+│       ├── models/
 │       ├── widgets/
-│       ├── theme/
-│       └── constants/
-├── pubspec.yaml
-└── android/ios/
+│       └── utils/
+└── ...
 ```
 
-## ⚙️ Configuração
+## ✨ Funcionalidades Planeadas
 
-1. **Instalar dependências:**
-
-```bash
-flutter pub get
-```
-
-2. **Configurar Google Sign-In:**
-
-- Adicionar `google-services.json` (Android) e `GoogleService-Info.plist` (iOS)
-- Configurar OAuth 2.0 no Google Cloud Console
-
-3. **Gerar código:**
-
-```bash
-flutter pub run build_runner build --delete-conflicting-outputs
-```
-
-## 🏃 Executar
-
-```bash
-# Debug
-flutter run
-
-# Release
-flutter run --release
-```
-
-## 📝 Próximos Passos
-
-- [ ] Implementar autenticação Google
-- [ ] Implementar CRUD de tarefas
-- [ ] Implementar sincronização offline
-- [ ] Implementar notificações locais
-- [ ] Implementar dashboard
-- [ ] Implementar modo de execução
-- [ ] Implementar estatísticas
+- [X] **Autenticação Segura com Google:** Login rápido e seguro usando a conta Google do utilizador.
+- [ ] **Sincronização com Google Calendar:** Visualização e gestão de eventos diretamente no app.
+- [ ] **Gestão de Notas e Tarefas:** Crie, edite e organize notas e tarefas de forma intuitiva.
+- [ ] **Agendamento Inteligente:** Programe eventos e defina prioridades.
+- [ ] **Lembretes e Notificações:** Receba lembretes para não perder nenhum compromisso importante.
+- [ ] **Modo Offline:** Acesso e gestão de dados mesmo sem conexão à internet.

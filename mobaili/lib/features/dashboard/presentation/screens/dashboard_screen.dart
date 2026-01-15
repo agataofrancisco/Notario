@@ -158,9 +158,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildDayStatus() {
     // TODO: Calcular status real baseado nas tarefas
-    const isOnTime = true;
     const tasksCompleted = 3;
     const tasksTotal = 5;
+    final isOnTime = tasksCompleted >= tasksTotal;
 
     return Card(
       child: Padding(
