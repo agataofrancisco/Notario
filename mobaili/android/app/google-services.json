@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "525067357557",
+    "project_id": "notario-6961f",
+    "storage_bucket": "notario-6961f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:525067357557:android:dc4f1816e8a6d79db4173c",
+        "android_client_info": {
+          "package_name": "notario.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAGbqYFWEEM6Ehd2w3CnrNVPLDCzkvUp9I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
