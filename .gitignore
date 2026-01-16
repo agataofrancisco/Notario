@@ -1,107 +1,48 @@
-# Dependências
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Firebase
-.firebase/
-firebase-debug.log
-firebase-debug.*.log
-.firebaserc
-
-# Firebase Tools (MUITO GRANDE - NÃO COMMITAR)
-firebase-tools.exe
-firebase-tools/
-**/firebase-tools*
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Go
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-*.test
-*.out
-vendor/
-
-# Flutter/Dart
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.packages
-.pub-cache/
-.pub/
-build/
-*.g.dart
-*.freezed.dart
-
-# Android
-*.iml
-.gradle
-local.properties
-.idea/
-*.hprof
-/android/app/debug
-/android/app/profile
-/android/app/release
-
-# iOS
-*.mode1v3
-*.mode2v3
-*.moved-aside
-*.pbxuser
-*.perspectivev3
-**/*sync/
-.sconsign.dblite
-.tags*
-**/.vagrant/
-**/DerivedData/
-Icon?
-**/Pods/
-**/.symlinks/
-profile
-xcuserdata
-**/.generated/
-Flutter/App.framework
-Flutter/Flutter.framework
-Flutter/Flutter.podspec
-Flutter/Generated.xcconfig
-**/Flutter/ephemeral/
-**/Pods/
-
-# Web
-.dart_tool/
-.packages
-pubspec.lock
-build/
-
-# Misc
+# Miscellaneous
+*.class
 *.log
 *.pyc
 *.swp
 .DS_Store
 .atom/
+.build/
 .buildlog/
 .history
 .svn/
+.swiftpm/
 migrate_working_dir/
 
-# Secrets
-.env
-.env.local
-*.pem
-*.key
-google-services.json.backup
-GoogleService-Info.plist.backup
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Firebase tools
+firebase-tools.exe
