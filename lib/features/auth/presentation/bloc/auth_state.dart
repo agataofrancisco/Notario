@@ -1,5 +1,5 @@
 import 'package:equatable/equatable.dart';
-import '../../domain/entities/user.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 abstract class AuthState extends Equatable {
   const AuthState();
@@ -14,15 +14,13 @@ class AuthLoading extends AuthState {}
 
 class AuthAuthenticated extends AuthState {
   final User user;
-  final String token;
 
   const AuthAuthenticated({
     required this.user,
-    required this.token,
   });
 
   @override
-  List<Object?> get props => [user, token];
+  List<Object?> get props => [user];
 }
 
 class AuthUnauthenticated extends AuthState {}

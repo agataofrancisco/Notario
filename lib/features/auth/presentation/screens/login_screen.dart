@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
@@ -13,38 +12,20 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: [
-      'email',
-      'https://www.googleapis.com/auth/calendar',
-    ],
-  );
-
   bool _isLoading = false;
 
   Future<void> _handleGoogleSignIn() async {
     setState(() => _isLoading = true);
 
     try {
-      final GoogleSignInAccount? account = await _googleSignIn.signIn();
-
-      if (account == null) {
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      final GoogleSignInAuthentication auth = await account.authentication;
-
-      if (auth.idToken != null && auth.accessToken != null) {
-        if (mounted) {
-          context.read<AuthBloc>().add(
-                AuthGoogleLoginRequested(
-                  idToken: auth.idToken!,
-                  accessToken: auth.accessToken!,
-                ),
-              );
-        }
-      }
+      // Trigger o evento de login no AuthBloc
+      // O AuthService dentro do AuthBloc vai lidar com o Google Sign-In
+      context.read<AuthBloc>().add(
+            AuthGoogleLoginRequested(
+              idToken: '', // Não usado quando Firebase faz tudo
+              accessToken: '', // Não usado quando Firebase faz tudo
+            ),
+          );
     } catch (error) {
       setState(() => _isLoading = false);
       if (mounted) {
@@ -70,6 +51,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 backgroundColor: Colors.red,
               ),
             );
+            setState(() => _isLoading = false);
+          }
+          if (state is AuthLoading) {
+            setState(() => _isLoading = true);
+          }
+          if (state is AuthAuthenticated || state is AuthUnauthenticated) {
             setState(() => _isLoading = false);
           }
         },
