@@ -66,29 +66,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthLoading());
 
     try {
-      // Modo DEMO - pular autenticação real
-      if (event.idToken == 'demo-token') {
-        final demoUser = User(
-          id: 'demo-user-id',
-          googleId: 'demo',
-          email: 'demo@notario.app',
-          nome: 'Utilizador Demo',
-          timezone: 'Europe/Lisbon',
-          criadoEm: DateTime.now(),
-          atualizadoEm: DateTime.now(),
-        );
-
-        // Salvar no cache
-        await _prefs.setString(AppConfig.tokenCacheKey, 'demo-token');
-        await _prefs.setString(
-          AppConfig.userCacheKey,
-          jsonEncode(demoUser.toJson()),
-        );
-
-        emit(AuthAuthenticated(user: demoUser, token: 'demo-token'));
-        return;
-      }
-
       // Autenticação real com Google
       final response = await _apiService.loginWithGoogle(
         idToken: event.idToken,
