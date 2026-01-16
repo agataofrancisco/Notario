@@ -1,30 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'core/repositories/task_firestore_repository.dart';
-import 'core/repositories/user_firestore_repository.dart';
-import 'core/services/auth_service.dart';
-import 'features/tasks/presentation/bloc/task_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'core/services/api_service.dart';
+import 'features/auth/presentation/bloc/auth_bloc.dart';
+import 'features/auth/presentation/bloc/auth_event.dart';
+import 'features/auth/presentation/bloc/auth_state.dart';
 import 'features/auth/presentation/screens/login_screen.dart';
 import 'features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'shared/theme/app_theme.dart';
 
 class NotarioApp extends StatelessWidget {
-  const NotarioApp({super.key});
+  final SharedPreferences prefs;
+
+  const NotarioApp({
+    super.key,
+    required this.prefs,
+  });
 
   @override
   Widget build(BuildContext context) {
     return MultiRepositoryProvider(
       providers: [
-        RepositoryProvider(create: (_) => TaskFirestoreRepository()),
-        RepositoryProvider(create: (_) => UserFirestoreRepository()),
-        RepositoryProvider(create: (_) => AuthService()),
+        RepositoryProvider<ApiService>(
+          create: (context) => ApiService(prefs),
+        ),
       ],
       child: MultiBlocProvider(
         providers: [
-          BlocProvider(
-            create: (context) => TaskBloc(
-              repository: context.read<TaskFirestoreRepository>(),
-            ),
+          BlocProvider<AuthBloc>(
+            create: (context) => AuthBloc(
+              apiService: context.read<ApiService>(),
+              prefs: prefs,
+            )..add(AuthCheckRequested()),
           ),
         ],
         child: MaterialApp(
@@ -33,16 +40,17 @@ class NotarioApp extends StatelessWidget {
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: ThemeMode.system,
-          home: StreamBuilder(
-            stream: context.read<AuthService>().authStateChanges,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+          home: BlocBuilder<AuthBloc, AuthState>(
+            builder: (context, state) {
+              if (state is AuthLoading || state is AuthInitial) {
                 return const Scaffold(
-                  body: Center(child: CircularProgressIndicator()),
+                  body: Center(
+                    child: CircularProgressIndicator(),
+                  ),
                 );
               }
 
-              if (snapshot.hasData) {
+              if (state is AuthAuthenticated) {
                 return const DashboardScreen();
               }
 
