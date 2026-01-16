@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
+import 'package:notario/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:notario/features/auth/presentation/bloc/auth_state.dart';
 import 'package:uuid/uuid.dart';
-import '../bloc/task_bloc.dart';
-import '../../../../core/services/auth_service.dart';
 import '../../domain/entities/task.dart';
+import '../bloc/task_bloc.dart';
 
 class TaskFormScreen extends StatefulWidget {
-  final DateTime date;
-  final Task? task; // Para edição
+  final Task? task;
 
-  const TaskFormScreen({
-    super.key,
-    required this.date,
-    this.task,
-  });
+  const TaskFormScreen({super.key, this.task});
+
+  bool get isEditing => task != null;
 
   @override
   State<TaskFormScreen> createState() => _TaskFormScreenState();
@@ -21,257 +20,208 @@ class TaskFormScreen extends StatefulWidget {
 
 class _TaskFormScreenState extends State<TaskFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _tituloController = TextEditingController();
-  final _descricaoController = TextEditingController();
-
-  late DateTime _dataInicio;
-  late TimeOfDay _horaInicio;
-  int _duracaoMinutos = 60;
-  Prioridade _prioridade = Prioridade.media;
+  late TextEditingController _titleController;
+  late TextEditingController _descriptionController;
+  late DateTime _startDate;
+  late TimeOfDay _startTime;
+  late int _durationMinutes;
+  late Prioridade _priority;
 
   @override
   void initState() {
     super.initState();
-    _dataInicio = widget.date;
-    _horaInicio = const TimeOfDay(hour: 9, minute: 0);
-
-    if (widget.task != null) {
-      _tituloController.text = widget.task!.titulo;
-      _descricaoController.text = widget.task!.descricao ?? '';
-      _dataInicio = widget.task!.dataInicio;
-      _horaInicio = TimeOfDay.fromDateTime(widget.task!.dataInicio);
-      _duracaoMinutos = widget.task!.duracaoMinutos;
-      _prioridade = widget.task!.prioridade;
-    }
+    _titleController = TextEditingController(text: widget.task?.titulo ?? '');
+    _descriptionController = TextEditingController(text: widget.task?.descricao ?? '');
+    _startDate = widget.task?.dataInicio ?? DateTime.now();
+    _startTime = TimeOfDay.fromDateTime(widget.task?.dataInicio ?? DateTime.now());
+    _durationMinutes = widget.task?.duracaoMinutos ?? 60;
+    _priority = widget.task?.prioridade ?? Prioridade.media;
   }
 
   @override
   void dispose() {
-    _tituloController.dispose();
-    _descricaoController.dispose();
+    _titleController.dispose();
+    _descriptionController.dispose();
     super.dispose();
+  }
+
+  Future<void> _selectDate() async {
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _startDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (pickedDate != null && pickedDate != _startDate) {
+      setState(() {
+        _startDate = pickedDate;
+      });
+    }
+  }
+
+  Future<void> _selectTime() async {
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: _startTime,
+    );
+    if (pickedTime != null && pickedTime != _startTime) {
+      setState(() {
+        _startTime = pickedTime;
+      });
+    }
+  }
+
+  void _submitForm() {
+    if (_formKey.currentState!.validate()) {
+      final authState = context.read<AuthBloc>().state;
+      if (authState is! AuthAuthenticated) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Erro: Usuário não autenticado.')),
+        );
+        return;
+      }
+
+      final finalDateTime = DateTime(
+        _startDate.year,
+        _startDate.month,
+        _startDate.day,
+        _startTime.hour,
+        _startTime.minute,
+      );
+
+      if (widget.isEditing) {
+        final updatedTask = widget.task!.copyWith(
+          titulo: _titleController.text,
+          descricao: _descriptionController.text,
+          dataInicio: finalDateTime,
+          duracaoMinutos: _durationMinutes,
+          prioridade: _priority,
+          atualizadoEm: DateTime.now(),
+        );
+        context.read<TaskBloc>().add(TaskUpdateRequested(updatedTask));
+      } else {
+        final newTask = Task(
+          id: const Uuid().v4(),
+          userId: authState.user.uid,
+          titulo: _titleController.text,
+          descricao: _descriptionController.text,
+          dataInicio: finalDateTime,
+          dataFim: finalDateTime.add(Duration(minutes: _durationMinutes)),
+          duracaoMinutos: _durationMinutes,
+          prioridade: _priority,
+          criadoEm: DateTime.now(),
+          atualizadoEm: DateTime.now(),
+        );
+        context.read<TaskBloc>().add(TaskCreateRequested(newTask));
+      }
+      Navigator.of(context).pop();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.task == null ? 'Nova Tarefa' : 'Editar Tarefa'),
+        title: Text(widget.isEditing ? 'Editar Tarefa' : 'Nova Tarefa'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.check),
+            onPressed: _submitForm,
+          ),
+        ],
       ),
-      body: BlocListener<TaskBloc, TaskState>(
-        listener: (context, state) {
-          if (state is TaskOperationSuccess) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message)),
-            );
-            Navigator.of(context).pop();
-          } else if (state is TaskError) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.message),
-                backgroundColor: Colors.red,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextFormField(
+                controller: _titleController,
+                decoration: const InputDecoration(labelText: 'Título'),
+                validator: (value) => value!.isEmpty ? 'Campo obrigatório' : null,
               ),
-            );
-          }
-        },
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Título
-                TextFormField(
-                  controller: _tituloController,
-                  decoration: const InputDecoration(
-                    labelText: 'Título',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.title),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor, insira um título';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Descrição
-                TextFormField(
-                  controller: _descricaoController,
-                  decoration: const InputDecoration(
-                    labelText: 'Descrição (opcional)',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.description),
-                  ),
-                  maxLines: 3,
-                ),
-                const SizedBox(height: 16),
-
-                // Data
-                ListTile(
-                  leading: const Icon(Icons.calendar_today),
-                  title: const Text('Data'),
-                  subtitle: Text(
-                    '${_dataInicio.day}/${_dataInicio.month}/${_dataInicio.year}',
-                  ),
-                  trailing: const Icon(Icons.edit),
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: _dataInicio,
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 365)),
-                    );
-                    if (date != null) {
-                      setState(() => _dataInicio = date);
-                    }
-                  },
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: BorderSide(color: Colors.grey[300]!),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Hora
-                ListTile(
-                  leading: const Icon(Icons.access_time),
-                  title: const Text('Hora de Início'),
-                  subtitle: Text(
-                      '${_horaInicio.hour}:${_horaInicio.minute.toString().padLeft(2, '0')}'),
-                  trailing: const Icon(Icons.edit),
-                  onTap: () async {
-                    final time = await showTimePicker(
-                      context: context,
-                      initialTime: _horaInicio,
-                    );
-                    if (time != null) {
-                      setState(() => _horaInicio = time);
-                    }
-                  },
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: BorderSide(color: Colors.grey[300]!),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Duração
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Duração: $_duracaoMinutos minutos',
-                      style: Theme.of(context).textTheme.titleMedium,
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _descriptionController,
+                decoration: const InputDecoration(labelText: 'Descrição (Opcional)'),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 24),
+              const Text('Data e Hora de Início', style: TextStyle(fontWeight: FontWeight.bold)),
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: _selectDate,
+                      child: InputDecorator(
+                        decoration: const InputDecoration(labelText: 'Data'),
+                        child: Text(DateFormat('dd/MM/yyyy').format(_startDate)),
+                      ),
                     ),
-                    Slider(
-                      value: _duracaoMinutos.toDouble(),
-                      min: 15,
-                      max: 480,
-                      divisions: 31,
-                      label: '$_duracaoMinutos min',
-                      onChanged: (value) {
-                        setState(() => _duracaoMinutos = value.toInt());
-                      },
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: InkWell(
+                      onTap: _selectTime,
+                      child: InputDecorator(
+                        decoration: const InputDecoration(labelText: 'Hora'),
+                        child: Text(_startTime.format(context)),
+                      ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // Prioridade
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Prioridade',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    SegmentedButton<Prioridade>(
-                      segments: const [
-                        ButtonSegment(
-                          value: Prioridade.baixa,
-                          label: Text('Baixa'),
-                          icon: Icon(Icons.arrow_downward),
-                        ),
-                        ButtonSegment(
-                          value: Prioridade.media,
-                          label: Text('Média'),
-                          icon: Icon(Icons.remove),
-                        ),
-                        ButtonSegment(
-                          value: Prioridade.alta,
-                          label: Text('Alta'),
-                          icon: Icon(Icons.arrow_upward),
-                        ),
-                      ],
-                      selected: {_prioridade},
-                      onSelectionChanged: (Set<Prioridade> newSelection) {
-                        setState(() => _prioridade = newSelection.first);
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 32),
-
-                // Botão Salvar
-                FilledButton.icon(
-                  onPressed: _saveTask,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              const Text('Duração (minutos)', style: TextStyle(fontWeight: FontWeight.bold)),
+              Slider(
+                value: _durationMinutes.toDouble(),
+                min: 15,
+                max: 240,
+                divisions: 15,
+                label: '$_durationMinutes min',
+                onChanged: (value) {
+                  setState(() {
+                    _durationMinutes = value.round();
+                  });
+                },
+              ),
+              const SizedBox(height: 24),
+              const Text('Prioridade', style: TextStyle(fontWeight: FontWeight.bold)),
+              DropdownButtonFormField<Prioridade>(
+                value: _priority,
+                items: Prioridade.values.map((p) {
+                  return DropdownMenuItem(
+                    value: p,
+                    child: Text(p.displayName),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      _priority = value;
+                    });
+                  }
+                },
+                decoration: const InputDecoration(labelText: 'Prioridade'),
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _submitForm,
                   icon: const Icon(Icons.save),
-                  label: Text(widget.task == null
-                      ? 'Criar Tarefa'
-                      : 'Salvar Alterações'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.all(16),
+                  label: const Text('Salvar Tarefa'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
-  }
-
-  void _saveTask() {
-    if (!_formKey.currentState!.validate()) return;
-
-    final authService = context.read<AuthService>();
-    final user = authService.currentUser;
-    if (user == null) return;
-
-    final dataInicio = DateTime(
-      _dataInicio.year,
-      _dataInicio.month,
-      _dataInicio.day,
-      _horaInicio.hour,
-      _horaInicio.minute,
-    );
-
-    final dataFim = dataInicio.add(Duration(minutes: _duracaoMinutos));
-
-    final task = Task(
-      id: widget.task?.id ?? const Uuid().v4(),
-      userId: user.id,
-      titulo: _tituloController.text,
-      descricao:
-          _descricaoController.text.isEmpty ? null : _descricaoController.text,
-      dataInicio: dataInicio,
-      dataFim: dataFim,
-      duracaoMinutos: _duracaoMinutos,
-      prioridade: _prioridade,
-      estado: widget.task?.estado ?? EstadoTarefa.pendente,
-      criadoEm: widget.task?.criadoEm ?? DateTime.now(),
-      atualizadoEm: DateTime.now(),
-    );
-
-    if (widget.task == null) {
-      context.read<TaskBloc>().add(TaskCreateRequested(task));
-    } else {
-      context.read<TaskBloc>().add(TaskUpdateRequested(task));
-    }
   }
 }

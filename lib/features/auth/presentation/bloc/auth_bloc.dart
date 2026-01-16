@@ -1,110 +1,68 @@
-import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../../core/config/app_config.dart';
 import '../../../../core/services/api_service.dart';
-import '../../domain/entities/user.dart';
-import 'auth_event.dart';
-import 'auth_state.dart';
+import '../../../../core/services/auth_service.dart';
+import './auth_event.dart';
+import './auth_state.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final ApiService _apiService;
+  final AuthService _authService;
   final SharedPreferences _prefs;
 
   AuthBloc({
     required ApiService apiService,
+    required AuthService authService,
     required SharedPreferences prefs,
   })  : _apiService = apiService,
+        _authService = authService,
         _prefs = prefs,
         super(AuthInitial()) {
-    on<AuthCheckRequested>(_onAuthCheckRequested);
+    on<AuthCheckRequested>(_onCheckRequested);
     on<AuthGoogleLoginRequested>(_onGoogleLoginRequested);
     on<AuthLogoutRequested>(_onLogoutRequested);
   }
 
-  Future<void> _onAuthCheckRequested(
-    AuthCheckRequested event,
-    Emitter<AuthState> emit,
-  ) async {
+  Future<void> _onCheckRequested(AuthCheckRequested event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
-
     try {
-      // Verificar se existe token salvo
-      final token = _prefs.getString(AppConfig.tokenCacheKey);
-      final userJson = _prefs.getString(AppConfig.userCacheKey);
-
-      if (token != null && userJson != null) {
-        // Tentar obter dados atualizados do servidor
-        try {
-          final userData = await _apiService.getMe();
-          final user = User.fromJson(userData);
-
-          // Atualizar cache
-          await _prefs.setString(
-            AppConfig.userCacheKey,
-            jsonEncode(user.toJson()),
-          );
-
-          emit(AuthAuthenticated(user: user, token: token));
-        } catch (e) {
-          // Se falhar, usar dados do cache
-          final user = User.fromJson(jsonDecode(userJson));
-          emit(AuthAuthenticated(user: user, token: token));
-        }
+      final user = _authService.currentUser;
+      if (user != null) {
+        // Opcional: verificar se o token ainda é válido ou refrescar dados
+        emit(AuthAuthenticated(user: user));
       } else {
         emit(AuthUnauthenticated());
       }
     } catch (e) {
-      emit(AuthUnauthenticated());
+      emit(AuthError(message: 'Erro ao verificar autenticação: ${e.toString()}'));
     }
   }
 
-  Future<void> _onGoogleLoginRequested(
-    AuthGoogleLoginRequested event,
-    Emitter<AuthState> emit,
-  ) async {
+  Future<void> _onGoogleLoginRequested(AuthGoogleLoginRequested event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
-
     try {
-      // Autenticação real com Google
-      final response = await _apiService.loginWithGoogle(
-        idToken: event.idToken,
-        accessToken: event.accessToken,
-      );
-
-      final user = User.fromJson(response['user']);
-      final token = response['jwt_token'];
-
-      // Salvar no cache
-      await _prefs.setString(AppConfig.tokenCacheKey, token);
-      await _prefs.setString(
-        AppConfig.userCacheKey,
-        jsonEncode(user.toJson()),
-      );
-
-      emit(AuthAuthenticated(user: user, token: token));
+      final user = await _authService.signInWithGoogle(event.idToken, event.accessToken);
+      if (user != null) {
+        // Opcional: Aqui você pode chamar o _apiService para enviar o token para o seu backend
+        emit(AuthAuthenticated(user: user));
+      } else {
+        emit(AuthError(message: 'Login com Google falhou. Tente novamente.'));
+      }
     } catch (e) {
-      emit(AuthError('Erro ao fazer login: ${e.toString()}'));
-      emit(AuthUnauthenticated());
+      emit(AuthError(message: 'Ocorreu um erro durante o login: ${e.toString()}'));
     }
   }
 
-  Future<void> _onLogoutRequested(
-    AuthLogoutRequested event,
-    Emitter<AuthState> emit,
-  ) async {
+  Future<void> _onLogoutRequested(AuthLogoutRequested event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
-
     try {
-      // Limpar cache
-      await _prefs.remove(AppConfig.tokenCacheKey);
-      await _prefs.remove(AppConfig.userCacheKey);
-
-      // TODO: Limpar base de dados local
-
+      await _authService.signOut();
+      // Limpar SharedPreferences se necessário
+      await _prefs.clear();
       emit(AuthUnauthenticated());
     } catch (e) {
-      emit(AuthError('Erro ao fazer logout: ${e.toString()}'));
+      emit(AuthError(message: 'Erro ao fazer logout: ${e.toString()}'));
     }
   }
 }

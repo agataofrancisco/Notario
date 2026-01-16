@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/services/api_service.dart';
+import 'core/services/auth_service.dart'; // Importa o AuthService
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/auth/presentation/bloc/auth_event.dart';
 import 'features/auth/presentation/bloc/auth_state.dart';
@@ -21,6 +22,10 @@ class NotarioApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiRepositoryProvider(
       providers: [
+        // Prover AuthService e ApiService para toda a aplicação
+        RepositoryProvider<AuthService>(
+          create: (context) => AuthService(),
+        ),
         RepositoryProvider<ApiService>(
           create: (context) => ApiService(prefs),
         ),
@@ -30,6 +35,7 @@ class NotarioApp extends StatelessWidget {
           BlocProvider<AuthBloc>(
             create: (context) => AuthBloc(
               apiService: context.read<ApiService>(),
+              authService: context.read<AuthService>(), // Injete o AuthService
               prefs: prefs,
             )..add(AuthCheckRequested()),
           ),
