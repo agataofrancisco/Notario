@@ -32,6 +32,13 @@ class ExecutionSkipped extends ExecutionEvent {}
 
 class ExecutionCancelled extends ExecutionEvent {}
 
+class ExecutionRescheduled extends ExecutionEvent {
+  final DateTime newDate;
+  const ExecutionRescheduled(this.newDate);
+  @override
+  List<Object?> get props => [newDate];
+}
+
 class ExecutionFinished extends ExecutionEvent {}
 
 class _ExecutionTicked extends ExecutionEvent {
@@ -107,6 +114,7 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
     on<ExecutionStopped>(_onStopped);
     on<ExecutionSkipped>(_onSkipped);
     on<ExecutionCancelled>(_onCancelled);
+    on<ExecutionRescheduled>(_onRescheduled);
     on<ExecutionFinished>(_onFinished);
     on<_ExecutionTicked>(_onTicked);
   }
@@ -159,6 +167,16 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
     final task = state.task;
     if (task != null) {
       await _repository.skipTask(task.id);
+    }
+    emit(const ExecutionInitial());
+  }
+
+  void _onRescheduled(
+      ExecutionRescheduled event, Emitter<ExecutionState> emit) async {
+    _timer?.cancel();
+    final task = state.task;
+    if (task != null) {
+      await _repository.rescheduleTask(task.id, event.newDate);
     }
     emit(const ExecutionInitial());
   }

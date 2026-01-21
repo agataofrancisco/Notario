@@ -239,4 +239,25 @@ class TaskRepository {
       whereArgs: [id],
     );
   }
+
+  // Reagendar tarefa
+  Future<void> rescheduleTask(String id, DateTime newStart) async {
+    final db = await _dbHelper.database;
+    final taskMap = await getById(id);
+    if (taskMap != null) {
+      final newEnd = newStart.add(Duration(minutes: taskMap.duracaoMinutos));
+      await db.update(
+        'tasks',
+        {
+          'data_inicio': newStart.toIso8601String(),
+          'data_fim': newEnd.toIso8601String(),
+          'estado': EstadoTarefa.pendente.toJson(), // Volta para pendente
+          'atualizado_em': DateTime.now().toIso8601String(),
+          'sync_status': SyncStatus.pending.toJson(),
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+  }
 }

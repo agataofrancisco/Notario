@@ -93,7 +93,7 @@ class _ExecutionView extends StatelessWidget {
           ),
           actions: [
             PopupMenuButton<String>(
-              onSelected: (value) {
+              onSelected: (value) async {
                 if (value == 'skip') {
                   context.read<ExecutionBloc>().add(ExecutionSkipped());
                 } else if (value == 'cancel') {
@@ -120,6 +120,39 @@ class _ExecutionView extends StatelessWidget {
                       ],
                     ),
                   );
+                } else if (value == 'reschedule') {
+                  // Mostrar date picker para reagendar
+                  // Usa contexto do builder para acessar o bloc se necessário,
+                  // mas aqui context é do build principal, que tem o Provider (via child do provider?).
+                  // Espere... O BlocProvider está acima do _ExecutionView.
+                  // Então context.read<ExecutionBloc> funciona.
+                  final now = DateTime.now();
+                  final pickedDate = await showDatePicker(
+                    context: context,
+                    initialDate: now.add(const Duration(days: 1)),
+                    firstDate: now,
+                    lastDate: DateTime(now.year + 1),
+                  );
+
+                  if (pickedDate != null && context.mounted) {
+                    final pickedTime = await showTimePicker(
+                      context: context,
+                      initialTime: const TimeOfDay(hour: 9, minute: 0),
+                    );
+
+                    if (pickedTime != null && context.mounted) {
+                      final newDateTime = DateTime(
+                        pickedDate.year,
+                        pickedDate.month,
+                        pickedDate.day,
+                        pickedTime.hour,
+                        pickedTime.minute,
+                      );
+                      context
+                          .read<ExecutionBloc>()
+                          .add(ExecutionRescheduled(newDateTime));
+                    }
+                  }
                 }
               },
               itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
@@ -140,6 +173,16 @@ class _ExecutionView extends StatelessWidget {
                       Icon(Icons.cancel, color: Colors.red),
                       SizedBox(width: 8),
                       Text('Cancelar Tarefa'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'reschedule',
+                  child: Row(
+                    children: [
+                      Icon(Icons.calendar_month, color: Colors.blue),
+                      SizedBox(width: 8),
+                      Text('Reagendar'),
                     ],
                   ),
                 ),

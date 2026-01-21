@@ -79,15 +79,10 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     }
   }
 
-  void _submitForm() {
+  void _performSave() {
     if (_formKey.currentState!.validate()) {
       final authState = context.read<AuthBloc>().state;
-      if (authState is! AuthAuthenticated) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erro: Usuário não autenticado.')),
-        );
-        return;
-      }
+      if (authState is! AuthAuthenticated) return;
 
       final finalDateTime = DateTime(
         _startDate.year,
@@ -128,6 +123,11 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
         context.read<TaskBloc>().add(TaskCreateRequested(newTask));
       }
     }
+  }
+
+  void _submitForm() {
+    // Agora o submit SEMPRE passa pela validação primeiro
+    _validateDay();
   }
 
   void _validateDay() {
@@ -212,7 +212,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
-                _submitForm();
+                _performSave();
               },
               child: const Text('Salvar Tarefa'),
             ),
