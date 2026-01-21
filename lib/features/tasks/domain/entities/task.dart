@@ -78,6 +78,8 @@ class Task {
   final int avisoDepoisMinutos;
   final EstadoTarefa estado;
   final int? tempoRealMinutos;
+  final bool isNegotiable;
+  final int safetyMarginMinutes;
   final bool sincronizado;
   final int versao;
   final DateTime criadoEm;
@@ -99,6 +101,8 @@ class Task {
     this.avisoDepoisMinutos = 5,
     this.estado = EstadoTarefa.pendente,
     this.tempoRealMinutos,
+    this.isNegotiable = true,
+    this.safetyMarginMinutes = 0,
     this.sincronizado = false,
     this.versao = 1,
     required this.criadoEm,
@@ -132,6 +136,9 @@ class Task {
           json['avisoDepoisMinutos'] ?? json['aviso_depois_minutos'] ?? 5,
       estado: EstadoTarefa.fromJson(json['estado'] ?? 'pendente'),
       tempoRealMinutos: json['tempoRealMinutos'] ?? json['tempo_real_minutos'],
+      isNegotiable: json['isNegotiable'] ?? json['is_negotiable'] ?? true,
+      safetyMarginMinutes:
+          json['safetyMarginMinutes'] ?? json['safety_margin_minutes'] ?? 0,
       sincronizado: json['sincronizado'] ?? false,
       versao: json['versao'] ?? 1,
       criadoEm: parseDateTime(json['criadoEm'] ?? json['criado_em']),
@@ -160,6 +167,8 @@ class Task {
       'avisoDepoisMinutos': avisoDepoisMinutos,
       'estado': estado.toJson(),
       'tempoRealMinutos': tempoRealMinutos,
+      'isNegotiable': isNegotiable,
+      'safetyMarginMinutes': safetyMarginMinutes,
       'sincronizado': sincronizado,
       'versao': versao,
       'criadoEm': criadoEm,
@@ -183,6 +192,8 @@ class Task {
       'aviso_depois_minutos': avisoDepoisMinutos,
       'estado': estado.toJson(),
       'tempo_real_minutos': tempoRealMinutos,
+      'is_negotiable': isNegotiable ? 1 : 0,
+      'safety_margin_minutes': safetyMarginMinutes,
       'sincronizado': sincronizado ? 1 : 0,
       'versao': versao,
       'criado_em': criadoEm.toIso8601String(),
@@ -207,6 +218,8 @@ class Task {
       avisoDepoisMinutos: map['aviso_depois_minutos'] ?? 5,
       estado: EstadoTarefa.fromJson(map['estado'] ?? 'pendente'),
       tempoRealMinutos: map['tempo_real_minutos'],
+      isNegotiable: map['is_negotiable'] == 1,
+      safetyMarginMinutes: map['safety_margin_minutes'] ?? 0,
       sincronizado: map['sincronizado'] == 1,
       versao: map['versao'] ?? 1,
       criadoEm: DateTime.parse(map['criado_em']),
@@ -232,6 +245,8 @@ class Task {
     int? avisoDepoisMinutos,
     EstadoTarefa? estado,
     int? tempoRealMinutos,
+    bool? isNegotiable,
+    int? safetyMarginMinutes,
     bool? sincronizado,
     int? versao,
     DateTime? criadoEm,
@@ -253,6 +268,8 @@ class Task {
       avisoDepoisMinutos: avisoDepoisMinutos ?? this.avisoDepoisMinutos,
       estado: estado ?? this.estado,
       tempoRealMinutos: tempoRealMinutos ?? this.tempoRealMinutos,
+      isNegotiable: isNegotiable ?? this.isNegotiable,
+      safetyMarginMinutes: safetyMarginMinutes ?? this.safetyMarginMinutes,
       sincronizado: sincronizado ?? this.sincronizado,
       versao: versao ?? this.versao,
       criadoEm: criadoEm ?? this.criadoEm,

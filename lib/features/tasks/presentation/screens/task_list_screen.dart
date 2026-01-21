@@ -3,8 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:notario/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:notario/features/auth/presentation/bloc/auth_state.dart';
 import '../bloc/task_bloc.dart';
-import '../widgets/task_list_item.dart'; // Importa o novo widget
+import '../widgets/task_card.dart';
 import './task_form_screen.dart';
+import './execution_screen.dart';
 
 class TaskListScreen extends StatefulWidget {
   const TaskListScreen({super.key});
@@ -37,16 +38,20 @@ class _TaskListScreenState extends State<TaskListScreen> {
           // Mostra um snackbar em caso de erro ou sucesso na operação
           if (state is TaskError) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message), backgroundColor: Colors.red),
+              SnackBar(
+                  content: Text(state.message), backgroundColor: Colors.red),
             );
           } else if (state is TaskOperationSuccess) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message), backgroundColor: Colors.green),
+              SnackBar(
+                  content: Text(state.message), backgroundColor: Colors.green),
             );
             // Recarrega a lista após uma operação bem-sucedida
             final authState = context.read<AuthBloc>().state;
             if (authState is AuthAuthenticated) {
-              context.read<TaskBloc>().add(TaskLoadRequested(authState.user.uid));
+              context
+                  .read<TaskBloc>()
+                  .add(TaskLoadRequested(authState.user.uid));
             }
           }
         },
@@ -67,13 +72,43 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 ),
               );
             }
-            // Usa o novo widget TaskListItem
-            return ListView.builder(
-              padding: const EdgeInsets.only(top: 8, bottom: 80), // Padding para o FAB
+            // Usa o novo widget TaskCard
+            return ListView.separated(
+              padding: const EdgeInsets.fromLTRB(
+                  16, 16, 16, 80), // Padding para o FAB
               itemCount: state.tasks.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final task = state.tasks[index];
-                return TaskListItem(task: task);
+                return TaskCard(
+                  task: task,
+                  onTap: () {
+                    // Navigate to Edit
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => TaskFormScreen(task: task),
+                      ),
+                    );
+                  },
+                  onStart: () {
+                    // Navigate to Execution Mode
+                    // Import ExecutionScreen dynamicamente ou no topo se preferir
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ExecutionScreen(task: task),
+                      ),
+                    );
+                  },
+                  onSkip: () {
+                    // Logic to Skip task
+                    // Por enquanto, apenas mostra um snackbar
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text(
+                              'Funcionalidade de Pular em desenvolvimento')),
+                    );
+                  },
+                );
               },
             );
           }

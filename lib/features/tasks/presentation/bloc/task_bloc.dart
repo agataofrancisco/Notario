@@ -2,6 +2,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../domain/entities/task.dart';
 import '../../../../core/repositories/task_firestore_repository.dart';
+import '../../../../core/services/google_calendar_service.dart';
+import '../../../../core/services/notification_service.dart';
 
 // Events
 abstract class TaskEvent extends Equatable {
@@ -86,18 +88,22 @@ class TaskSkipRequested extends TaskEvent {
 }
 
 class TaskValidateDayRequested extends TaskEvent {
+  final String userId;
   final DateTime data;
   final int duracaoMinutos;
   final String prioridade;
+  final String? taskIdToExclude;
 
   const TaskValidateDayRequested({
+    required this.userId,
     required this.data,
     required this.duracaoMinutos,
     required this.prioridade,
+    this.taskIdToExclude,
   });
 
   @override
-  List<Object?> get props => [data, duracaoMinutos, prioridade];
+  List<Object?> get props => [userId, data, duracaoMinutos, prioridade, taskIdToExclude];
 }
 
 // States
@@ -177,9 +183,17 @@ class TaskError extends TaskState {
 // BLoC
 class TaskBloc extends Bloc<TaskEvent, TaskState> {
   final TaskFirestoreRepository _repository;
+  final GoogleCalendarService _googleCalendarService;
+  final NotificationService _notificationService;
 
-  TaskBloc({required TaskFirestoreRepository repository})
+  TaskBloc({
+    required TaskFirestoreRepository repository,
+    required GoogleCalendarService googleCalendarService,
+    required NotificationService notificationService,
+  })
       : _repository = repository,
+        _googleCalendarService = googleCalendarService,
+        _notificationService = notificationService,
         super(TaskInitial()) {
     on<TaskLoadRequested>(_onLoadRequested);
     on<TaskDayLoadRequested>(_onDayLoadRequested);
@@ -230,7 +244,34 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
     Emitter<TaskState> emit,
   ) async {
     try {
-      await _repository.create(event.task);
+      var taskToSave = event.task;
+
+      // 1) Tenta criar evento no Google Calendar (não bloqueia o salvamento)
+      try {
+        final createdEvent = await _googleCalendarService.createEventFromTask(
+          title: taskToSave.titulo,
+          description: taskToSave.descricao,
+          startTime: taskToSave.dataInicio,
+          durationMinutes: taskToSave.duracaoMinutos,
+        );
+        taskToSave = taskToSave.copyWith(
+          googleEventId: createdEvent.id,
+          sincronizado: true,
+        );
+      } catch (_) {
+        taskToSave = taskToSave.copyWith(sincronizado: false);
+      }
+
+      // 2) Persistir no Firestore
+      await _repository.create(taskToSave);
+
+      // 3) Lembrete local
+      await _notificationService.scheduleTaskReminder(
+        taskId: taskToSave.id,
+        title: taskToSave.titulo,
+        startTime: taskToSave.dataInicio,
+        minutesBefore: taskToSave.avisoAntesMinutos,
+      );
       emit(const TaskOperationSuccess('Tarefa criada com sucesso!'));
     } catch (e) {
       emit(TaskError('Erro ao criar tarefa: ${e.toString()}'));
@@ -242,7 +283,47 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
     Emitter<TaskState> emit,
   ) async {
     try {
-      await _repository.update(event.task);
+      var taskToSave = event.task;
+
+      // 1) Atualizar / criar evento no Google Calendar (não bloqueia o salvamento)
+      try {
+        if (taskToSave.googleEventId != null &&
+            taskToSave.googleEventId!.isNotEmpty) {
+          await _googleCalendarService.updateEvent(
+            eventId: taskToSave.googleEventId!,
+            title: taskToSave.titulo,
+            description: taskToSave.descricao,
+            startTime: taskToSave.dataInicio,
+            durationMinutes: taskToSave.duracaoMinutos,
+          );
+          taskToSave = taskToSave.copyWith(sincronizado: true);
+        } else {
+          final createdEvent = await _googleCalendarService.createEventFromTask(
+            title: taskToSave.titulo,
+            description: taskToSave.descricao,
+            startTime: taskToSave.dataInicio,
+            durationMinutes: taskToSave.duracaoMinutos,
+          );
+          taskToSave = taskToSave.copyWith(
+            googleEventId: createdEvent.id,
+            sincronizado: true,
+          );
+        }
+      } catch (_) {
+        taskToSave = taskToSave.copyWith(sincronizado: false);
+      }
+
+      // 2) Persistir no Firestore
+      await _repository.update(taskToSave);
+
+      // 3) Atualizar lembrete local
+      await _notificationService.cancelNotification(taskToSave.id);
+      await _notificationService.scheduleTaskReminder(
+        taskId: taskToSave.id,
+        title: taskToSave.titulo,
+        startTime: taskToSave.dataInicio,
+        minutesBefore: taskToSave.avisoAntesMinutos,
+      );
       emit(const TaskOperationSuccess('Tarefa atualizada com sucesso!'));
     } catch (e) {
       emit(TaskError('Erro ao atualizar tarefa: ${e.toString()}'));
@@ -254,6 +335,17 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
     Emitter<TaskState> emit,
   ) async {
     try {
+      // Buscar tarefa para tentar remover eventId e cancelar lembrete
+      final task = await _repository.getById(event.taskId);
+      if (task?.googleEventId != null && task!.googleEventId!.isNotEmpty) {
+        try {
+          await _googleCalendarService.deleteEvent(task.googleEventId!);
+        } catch (_) {
+          // Não bloquear delete local
+        }
+      }
+
+      await _notificationService.cancelNotification(event.taskId);
       await _repository.delete(event.taskId);
       emit(const TaskOperationSuccess('Tarefa eliminada com sucesso!'));
     } catch (e) {
@@ -307,6 +399,8 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
         data: event.data,
         duracaoMinutos: event.duracaoMinutos,
         prioridade: event.prioridade,
+        userId: event.userId,
+        taskIdToExclude: event.taskIdToExclude,
       );
 
       emit(TaskValidationResult(

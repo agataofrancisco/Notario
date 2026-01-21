@@ -17,6 +17,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         super(AuthInitial()) {
     on<AuthCheckRequested>(_onCheckRequested);
     on<AuthGoogleLoginRequested>(_onGoogleLoginRequested);
+    on<AuthEmailLoginRequested>(_onEmailLoginRequested);
+    on<AuthEmailRegisterRequested>(_onEmailRegisterRequested);
+    on<AuthPasswordResetRequested>(_onPasswordResetRequested);
     on<AuthLogoutRequested>(_onLogoutRequested);
   }
 
@@ -44,17 +47,111 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     emit(AuthLoading());
     try {
-      final userCredential = await _authService.signInWithGoogle();
-      final user = userCredential.user;
-
-      if (user != null) {
-        emit(AuthAuthenticated(user: user));
-      } else {
-        emit(AuthError('Login com Google falhou. Tente novamente.'));
-        emit(AuthUnauthenticated());
-      }
+      final user =
+          await _authService.signInWithGoogle(clientId: event.clientId);
+      emit(AuthAuthenticated(user: user));
     } catch (e) {
-      emit(AuthError('Ocorreu um erro durante o login: ${e.toString()}'));
+      emit(AuthError('Erro ao fazer login com Google: ${e.toString()}'));
+      emit(AuthUnauthenticated());
+    }
+  }
+
+  Future<void> _onEmailLoginRequested(
+    AuthEmailLoginRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(AuthLoading());
+    try {
+      final user = await _authService.signInWithEmail(
+        email: event.email,
+        password: event.password,
+      );
+      emit(AuthAuthenticated(user: user));
+    } on FirebaseAuthException catch (e) {
+      String message;
+      switch (e.code) {
+        case 'user-not-found':
+          message = 'Usuário não encontrado. Verifique o email.';
+          break;
+        case 'wrong-password':
+          message = 'Senha incorreta. Tente novamente.';
+          break;
+        case 'invalid-email':
+          message = 'Email inválido.';
+          break;
+        case 'user-disabled':
+          message = 'Esta conta foi desativada.';
+          break;
+        default:
+          message = 'Erro ao fazer login: ${e.message}';
+      }
+      emit(AuthError(message));
+      emit(AuthUnauthenticated());
+    } catch (e) {
+      emit(AuthError('Erro ao fazer login: ${e.toString()}'));
+      emit(AuthUnauthenticated());
+    }
+  }
+
+  Future<void> _onEmailRegisterRequested(
+    AuthEmailRegisterRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(AuthLoading());
+    try {
+      final user = await _authService.registerWithEmail(
+        email: event.email,
+        password: event.password,
+        displayName: event.displayName,
+      );
+      emit(AuthAuthenticated(user: user));
+    } on FirebaseAuthException catch (e) {
+      String message;
+      switch (e.code) {
+        case 'email-already-in-use':
+          message = 'Este email já está em uso. Tente fazer login.';
+          break;
+        case 'invalid-email':
+          message = 'Email inválido.';
+          break;
+        case 'weak-password':
+          message = 'Senha muito fraca. Use pelo menos 6 caracteres.';
+          break;
+        default:
+          message = 'Erro ao registrar: ${e.message}';
+      }
+      emit(AuthError(message));
+      emit(AuthUnauthenticated());
+    } catch (e) {
+      emit(AuthError('Erro ao registrar: ${e.toString()}'));
+      emit(AuthUnauthenticated());
+    }
+  }
+
+  Future<void> _onPasswordResetRequested(
+    AuthPasswordResetRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    try {
+      await _authService.resetPassword(event.email);
+      emit(AuthPasswordResetSent());
+      emit(AuthUnauthenticated());
+    } on FirebaseAuthException catch (e) {
+      String message;
+      switch (e.code) {
+        case 'user-not-found':
+          message = 'Usuário não encontrado com este email.';
+          break;
+        case 'invalid-email':
+          message = 'Email inválido.';
+          break;
+        default:
+          message = 'Erro ao enviar email: ${e.message}';
+      }
+      emit(AuthError(message));
+      emit(AuthUnauthenticated());
+    } catch (e) {
+      emit(AuthError('Erro ao enviar email de reset: ${e.toString()}'));
       emit(AuthUnauthenticated());
     }
   }

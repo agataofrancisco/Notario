@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../domain/entities/task.dart';
 import '../screens/task_form_screen.dart';
+import '../screens/execution_screen.dart';
 
 class TaskListItem extends StatelessWidget {
   final Task task;
@@ -50,8 +51,27 @@ class TaskListItem extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Icon(statusIcon, color: Theme.of(context).primaryColor),
+                  const SizedBox(width: 8),
+                  if (task.estado == EstadoTarefa.pendente ||
+                      task.estado == EstadoTarefa.emExecucao ||
+                      task.estado == EstadoTarefa.pulada)
+                    IconButton(
+                      icon: const Icon(
+                        Icons.play_circle_fill_rounded,
+                        size: 32,
+                        color: Colors.green,
+                      ),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ExecutionScreen(task: task),
+                          ),
+                        );
+                      },
+                      tooltip: 'Iniciar Execução',
+                    )
+                  else
+                    Icon(statusIcon, color: Theme.of(context).primaryColor),
                 ],
               ),
               const SizedBox(height: 8),
@@ -75,7 +95,8 @@ class TaskListItem extends StatelessWidget {
                   _buildInfoChip(
                     context,
                     icon: Icons.calendar_today_outlined,
-                    label: DateFormat('dd/MM/yy \'às\' HH:mm', 'pt_PT').format(task.dataInicio),
+                    label: DateFormat('dd/MM/yy \'às\' HH:mm', 'pt_PT')
+                        .format(task.dataInicio),
                   ),
                   _buildInfoChip(
                     context,
@@ -91,7 +112,8 @@ class TaskListItem extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoChip(BuildContext context, {required IconData icon, required String label}) {
+  Widget _buildInfoChip(BuildContext context,
+      {required IconData icon, required String label}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -104,7 +126,10 @@ class TaskListItem extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             label,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey.shade900),
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey.shade900),
           ),
         ],
       ),

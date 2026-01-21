@@ -1,12 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import '../../features/tasks/domain/entities/task.dart';
 
 /// Repositório de tarefas usando Firestore
 /// Substitui o antigo TaskRepository que usava SQLite
 class TaskFirestoreRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseFunctions _functions = FirebaseFunctions.instance;
 
   // Referência à coleção de tarefas
   CollectionReference get _tasksCollection => _firestore.collection('tasks');
@@ -143,29 +141,162 @@ class TaskFirestoreRepository {
     });
   }
 
-  /// Validar se dia comporta tarefa (chama Cloud Function)
+  /// Validar se dia comporta tarefa
+  /// Retorna informações sobre viabilidade, tempo livre, e sugestões
   Future<Map<String, dynamic>> validateDay({
     required DateTime data,
     required int duracaoMinutos,
     required String prioridade,
+    String? userId,
+    String? taskIdToExclude,
   }) async {
     try {
-      final callable = _functions.httpsCallable('validateDay');
-      final result = await callable.call({
-        'data': data.toIso8601String(),
-        'duracaoMinutos': duracaoMinutos,
-        'prioridade': prioridade,
+      if (userId == null) {
+        throw Exception('userId é obrigatório para validação');
+      }
+
+      // Constante: minutos úteis por dia (16 horas)
+      const minutosUteisDia = 960;
+
+      // 1. Buscar tarefas do dia
+      final startOfDay = DateTime(data.year, data.month, data.day);
+      final endOfDay = startOfDay.add(const Duration(days: 1));
+
+      final snapshot = await _tasksCollection
+          .where('userId', isEqualTo: userId)
+          .where('dataInicio',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where('dataInicio', isLessThan: Timestamp.fromDate(endOfDay))
+          .where('estado', whereIn: ['pendente', 'emExecucao']).get();
+
+      final tasks = snapshot.docs
+          .map((doc) => Task.fromJson(doc.data() as Map<String, dynamic>))
+          .where((task) => task.id != taskIdToExclude)
+          .toList();
+
+      // 2. Calcular tempo ocupado
+      final tempoOcupado =
+          tasks.fold<int>(0, (sum, task) => sum + task.duracaoMinutos);
+      final tempoLivre = minutosUteisDia - tempoOcupado;
+      final percentual = (tempoOcupado / minutosUteisDia * 100).round();
+
+      // 3. Verificar viabilidade
+      if (tempoLivre >= duracaoMinutos) {
+        return {
+          'viavel': true,
+          'tempoLivreMinutos': tempoLivre,
+          'tempoOcupadoMinutos': tempoOcupado,
+          'percentualOcupado': percentual,
+          'mensagem': 'Há ${_formatTempo(tempoLivre)} livres. Pode agendar!',
+          'tarefasExistentes': tasks.length,
+        };
+      }
+
+      // 4. Não cabe - buscar soluções
+      final faltam = duracaoMinutos - tempoLivre;
+      final prioridadeAtual = _parsePrioridade(prioridade);
+
+      // 4.1. Tarefas de menor prioridade
+      final tarefasParaMover = tasks
+          .where((t) =>
+              _getPrioridadeValue(t.prioridade) <
+              _getPrioridadeValue(prioridadeAtual))
+          .toList()
+        ..sort((a, b) => _getPrioridadeValue(a.prioridade)
+            .compareTo(_getPrioridadeValue(b.prioridade)));
+
+      int tempoLiberado = 0;
+      List<Map<String, dynamic>> sugestoes = [];
+      for (var task in tarefasParaMover) {
+        if (tempoLiberado >= faltam) break;
+        tempoLiberado += task.duracaoMinutos;
+        sugestoes.add({
+          'id': task.id,
+          'titulo': task.titulo,
+          'duracaoMinutos': task.duracaoMinutos,
+          'prioridade': task.prioridade.toJson(),
+        });
+      }
+
+      // 4.2. Dias alternativos
+      final diasAlternativos =
+          await _buscarDiasAlternativos(userId, data, duracaoMinutos);
+
+      if (sugestoes.isNotEmpty && tempoLiberado >= faltam) {
+        return {
+          'viavel': false,
+          'tempoLivreMinutos': tempoLivre,
+          'tempoOcupadoMinutos': tempoOcupado,
+          'percentualOcupado': percentual,
+          'mensagem':
+              'Faltam ${_formatTempo(faltam)}. Sugestão: mover ${sugestoes.length} tarefa(s).',
+          'tarefasParaMover': sugestoes,
+          'diasAlternativos': diasAlternativos,
+        };
+      }
+
+      return {
+        'viavel': false,
+        'tempoLivreMinutos': tempoLivre,
+        'tempoOcupadoMinutos': tempoOcupado,
+        'percentualOcupado': percentual,
+        'mensagem':
+            'Não há espaço (faltam ${_formatTempo(faltam)}). Escolha outro dia.',
+        'diasAlternativos': diasAlternativos,
+      };
+    } catch (e) {
+      throw Exception('Erro ao validar dia: $e');
+    }
+  }
+
+  Future<List<DateTime>> _buscarDiasAlternativos(
+      String userId, DateTime dataInicial, int duracaoNecessaria) async {
+    final dias = <DateTime>[];
+    for (int i = 1; i <= 7 && dias.length < 3; i++) {
+      final dia = dataInicial.add(Duration(days: i));
+      final start = DateTime(dia.year, dia.month, dia.day);
+      final end = start.add(const Duration(days: 1));
+
+      final snapshot = await _tasksCollection
+          .where('userId', isEqualTo: userId)
+          .where('dataInicio',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+          .where('dataInicio', isLessThan: Timestamp.fromDate(end))
+          .where('estado', whereIn: ['pendente', 'emExecucao']).get();
+
+      final ocupado = snapshot.docs.fold<int>(0, (sum, doc) {
+        final data = doc.data() as Map<String, dynamic>?;
+        if (data == null) return sum;
+        return sum + ((data['duracaoMinutos'] as num?)?.toInt() ?? 0);
       });
 
-      return result.data as Map<String, dynamic>;
-    } catch (e) {
-      // Se Cloud Function não existir ainda, retornar resposta mock
-      return {
-        'viavel': true,
-        'tempoLivreMinutos': 480, // 8h
-        'mensagem': 'Validação local (Cloud Function não disponível)',
-      };
+      if (960 - ocupado >= duracaoNecessaria) dias.add(dia);
     }
+    return dias;
+  }
+
+  Prioridade _parsePrioridade(String p) {
+    switch (p.toLowerCase()) {
+      case 'alta':
+        return Prioridade.alta;
+      case 'baixa':
+        return Prioridade.baixa;
+      default:
+        return Prioridade.media;
+    }
+  }
+
+  int _getPrioridadeValue(Prioridade p) => p == Prioridade.alta
+      ? 3
+      : p == Prioridade.media
+          ? 2
+          : 1;
+
+  String _formatTempo(int min) {
+    if (min < 60) return '$min min';
+    final h = min ~/ 60;
+    final m = min % 60;
+    return m == 0 ? '${h}h' : '${h}h ${m}min';
   }
 
   /// Limpar todas as tarefas do utilizador (útil para logout)

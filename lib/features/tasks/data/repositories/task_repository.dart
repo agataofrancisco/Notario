@@ -177,4 +177,66 @@ class TaskRepository {
 
     return maps.map((map) => Task.fromMap(map)).toList();
   }
+
+  // Iniciar tarefa
+  Future<void> startTask(String id) async {
+    final db = await _dbHelper.database;
+    await db.update(
+      'tasks',
+      {
+        'estado': EstadoTarefa.emExecucao.toJson(),
+        'atualizado_em': DateTime.now().toIso8601String(),
+        'sync_status': SyncStatus.pending.toJson(),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // Concluir tarefa
+  Future<void> completeTask(String id, int tempoRealMinutos) async {
+    final db = await _dbHelper.database;
+    await db.update(
+      'tasks',
+      {
+        'estado': EstadoTarefa.concluida.toJson(),
+        'tempo_real_minutos': tempoRealMinutos,
+        'concluido_em': DateTime.now().toIso8601String(),
+        'atualizado_em': DateTime.now().toIso8601String(),
+        'sync_status': SyncStatus.pending.toJson(),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // Pular tarefa
+  Future<void> skipTask(String id) async {
+    final db = await _dbHelper.database;
+    await db.update(
+      'tasks',
+      {
+        'estado': EstadoTarefa.pulada.toJson(),
+        'atualizado_em': DateTime.now().toIso8601String(),
+        'sync_status': SyncStatus.pending.toJson(),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // Cancelar tarefa
+  Future<void> cancelTask(String id) async {
+    final db = await _dbHelper.database;
+    await db.update(
+      'tasks',
+      {
+        'estado': EstadoTarefa.cancelada.toJson(),
+        'atualizado_em': DateTime.now().toIso8601String(),
+        'sync_status': SyncStatus.pending.toJson(),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
 }

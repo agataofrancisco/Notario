@@ -19,9 +19,19 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createDB,
+      onUpgrade: _onUpgrade,
     );
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute(
+          'ALTER TABLE tasks ADD COLUMN is_negotiable INTEGER DEFAULT 1');
+      await db.execute(
+          'ALTER TABLE tasks ADD COLUMN safety_margin_minutes INTEGER DEFAULT 0');
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -56,8 +66,10 @@ class DatabaseHelper {
         aviso_depois_minutos INTEGER DEFAULT 5,
         estado TEXT DEFAULT 'pendente',
         tempo_real_minutos INTEGER,
+        is_negotiable INTEGER DEFAULT 1,
+        safety_margin_minutes INTEGER DEFAULT 0,
         sincronizado INTEGER DEFAULT 0,
-        versao INTEGER DEFAULT 1,
+        versao INTEGER DEFAULT 2,
         criado_em TEXT NOT NULL,
         atualizado_em TEXT NOT NULL,
         concluido_em TEXT,

@@ -12,31 +12,92 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  bool _isLoading = false;
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _nameController = TextEditingController();
 
-  Future<void> _handleGoogleSignIn() async {
+  bool _isLogin = true; // true = login, false = register
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  void _handleEmailAuth() {
+    if (!_formKey.currentState!.validate()) return;
+
     setState(() => _isLoading = true);
 
-    try {
-      // Trigger o evento de login no AuthBloc
-      // O AuthService dentro do AuthBloc vai lidar com o Google Sign-In
+    if (_isLogin) {
       context.read<AuthBloc>().add(
-            AuthGoogleLoginRequested(
-              idToken: '', // Não usado quando Firebase faz tudo
-              accessToken: '', // Não usado quando Firebase faz tudo
+            AuthEmailLoginRequested(
+              email: _emailController.text.trim(),
+              password: _passwordController.text,
             ),
           );
-    } catch (error) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao fazer login: $error'),
-            backgroundColor: Colors.red,
+    } else {
+      context.read<AuthBloc>().add(
+            AuthEmailRegisterRequested(
+              email: _emailController.text.trim(),
+              password: _passwordController.text,
+              displayName: _nameController.text.trim(),
+            ),
+          );
+    }
+  }
+
+  void _handleGoogleSignIn() {
+    setState(() => _isLoading = true);
+    // Para fluxo com Client ID direto sem Firebase Credential,
+    // o Bloc chama o Service que faz o login.
+    context.read<AuthBloc>().add(
+          const AuthGoogleLoginRequested(
+            clientId:
+                '525067357557-p65t0ap1mfjgo90ru7qep6068k7vg4fd.apps.googleusercontent.com',
           ),
         );
-      }
-    }
+  }
+
+  void _showResetPasswordDialog() {
+    final emailController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Recuperar Senha'),
+        content: TextField(
+          controller: emailController,
+          decoration: const InputDecoration(
+            labelText: 'Email',
+            hintText: 'Digite seu email',
+          ),
+          keyboardType: TextInputType.emailAddress,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (emailController.text.trim().isNotEmpty) {
+                context.read<AuthBloc>().add(
+                      AuthPasswordResetRequested(emailController.text.trim()),
+                    );
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Enviar'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -52,6 +113,15 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             );
             setState(() => _isLoading = false);
+          }
+          if (state is AuthPasswordResetSent) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'Email de recuperação enviado! Verifique sua caixa de entrada.'),
+                backgroundColor: Colors.green,
+              ),
+            );
           }
           if (state is AuthLoading) {
             setState(() => _isLoading = true);
@@ -78,7 +148,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Logo e título
+                    // Logo
                     Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
@@ -94,106 +164,256 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       child: Icon(
                         Icons.calendar_today_rounded,
-                        size: 80,
+                        size: 60,
                         color: Theme.of(context).colorScheme.primary,
                       ),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 24),
                     const Text(
                       'NOTÁRIO',
                       style: TextStyle(
-                        fontSize: 48,
+                        fontSize: 36,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                         letterSpacing: 2,
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
                     const Text(
                       'Motor de Disciplina',
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 16,
                         color: Colors.white70,
                         fontWeight: FontWeight.w300,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Notas + Calendário',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.white60,
-                        fontWeight: FontWeight.w300,
-                      ),
-                    ),
-                    const SizedBox(height: 64),
+                    const SizedBox(height: 48),
 
-                    // Card com descrição
+                    // Card de Login/Registro
                     Card(
                       elevation: 8,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(20),
                       ),
                       child: Padding(
                         padding: const EdgeInsets.all(24.0),
-                        child: Column(
-                          children: [
-                            _buildFeatureItem(
-                              Icons.check_circle_outline,
-                              'Sincronização com Google Calendar',
-                            ),
-                            const SizedBox(height: 16),
-                            _buildFeatureItem(
-                              Icons.schedule,
-                              'Agendamento Inteligente',
-                            ),
-                            const SizedBox(height: 16),
-                            _buildFeatureItem(
-                              Icons.priority_high,
-                              'Sistema de Prioridades',
-                            ),
-                            const SizedBox(height: 16),
-                            _buildFeatureItem(
-                              Icons.offline_bolt,
-                              'Funciona Offline',
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 48),
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Toggle Login/Register
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextButton(
+                                      onPressed: () =>
+                                          setState(() => _isLogin = true),
+                                      style: TextButton.styleFrom(
+                                        backgroundColor: _isLogin
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                            : Colors.transparent,
+                                        foregroundColor: _isLogin
+                                            ? Colors.white
+                                            : Theme.of(context)
+                                                .colorScheme
+                                                .primary,
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 12),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        'Entrar',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: TextButton(
+                                      onPressed: () =>
+                                          setState(() => _isLogin = false),
+                                      style: TextButton.styleFrom(
+                                        backgroundColor: !_isLogin
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                            : Colors.transparent,
+                                        foregroundColor: !_isLogin
+                                            ? Colors.white
+                                            : Theme.of(context)
+                                                .colorScheme
+                                                .primary,
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 12),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        'Registrar',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
 
-                    // Botão de login com Google
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton.icon(
-                        onPressed: _isLoading ? null : _handleGoogleSignIn,
-                        icon: _isLoading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white,
+                              // Nome (apenas para registro)
+                              if (!_isLogin) ...[
+                                TextFormField(
+                                  controller: _nameController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Nome',
+                                    prefixIcon: Icon(Icons.person),
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  validator: (value) {
+                                    if (value == null || value.trim().isEmpty) {
+                                      return 'Digite seu nome';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+
+                              // Email
+                              TextFormField(
+                                controller: _emailController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Email',
+                                  prefixIcon: Icon(Icons.email),
+                                  border: OutlineInputBorder(),
+                                ),
+                                keyboardType: TextInputType.emailAddress,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'Digite seu email';
+                                  }
+                                  if (!value.contains('@')) {
+                                    return 'Email inválido';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 16),
+
+                              // Senha
+                              TextFormField(
+                                controller: _passwordController,
+                                decoration: InputDecoration(
+                                  labelText: 'Senha',
+                                  prefixIcon: const Icon(Icons.lock),
+                                  border: const OutlineInputBorder(),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      _obscurePassword
+                                          ? Icons.visibility_off
+                                          : Icons.visibility,
+                                    ),
+                                    onPressed: () {
+                                      setState(() =>
+                                          _obscurePassword = !_obscurePassword);
+                                    },
                                   ),
                                 ),
-                              )
-                            : const Icon(Icons.login, size: 24),
-                        label: Text(
-                          _isLoading ? 'Autenticando...' : 'Entrar com Google',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.black87,
-                          elevation: 4,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                                obscureText: _obscurePassword,
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Digite sua senha';
+                                  }
+                                  if (!_isLogin && value.length < 6) {
+                                    return 'Senha deve ter pelo menos 6 caracteres';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 8),
+
+                              // Esqueceu a senha?
+                              if (_isLogin)
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton(
+                                    onPressed: _showResetPasswordDialog,
+                                    child: const Text('Esqueceu a senha?'),
+                                  ),
+                                ),
+                              const SizedBox(height: 16),
+
+                              // Botão de Login/Registro
+                              ElevatedButton(
+                                onPressed: _isLoading ? null : _handleEmailAuth,
+                                style: ElevatedButton.styleFrom(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : Text(
+                                        _isLogin ? 'Entrar' : 'Criar Conta',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Divider
+                              Row(
+                                children: [
+                                  Expanded(
+                                      child: Divider(color: Colors.grey[400])),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16),
+                                    child: Text(
+                                      'OU',
+                                      style: TextStyle(color: Colors.grey[600]),
+                                    ),
+                                  ),
+                                  Expanded(
+                                      child: Divider(color: Colors.grey[400])),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Botão Google (Opcional)
+                              OutlinedButton.icon(
+                                onPressed:
+                                    _isLoading ? null : _handleGoogleSignIn,
+                                icon: const Icon(Icons.login, size: 20),
+                                label:
+                                    const Text('Entrar com Google (Opcional)'),
+                                style: OutlinedButton.styleFrom(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -215,28 +435,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildFeatureItem(IconData icon, String text) {
-    return Row(
-      children: [
-        Icon(
-          icon,
-          color: Theme.of(context).colorScheme.primary,
-          size: 24,
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Text(
-            text,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
