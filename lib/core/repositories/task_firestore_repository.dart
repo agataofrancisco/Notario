@@ -42,6 +42,35 @@ class TaskFirestoreRepository {
             .toList());
   }
 
+  /// Obter tarefas num intervalo de datas (Stream)
+  /// Útil para o mini-calendário (ex: 7 dias) sem precisar abrir 7 streams.
+  Stream<List<Task>> watchRangeTasks({
+    required String userId,
+    required DateTime startInclusive,
+    required DateTime endExclusive,
+  }) {
+    final start = DateTime(
+      startInclusive.year,
+      startInclusive.month,
+      startInclusive.day,
+    );
+    final end = DateTime(
+      endExclusive.year,
+      endExclusive.month,
+      endExclusive.day,
+    );
+
+    return _tasksCollection
+        .where('userId', isEqualTo: userId)
+        .where('dataInicio', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('dataInicio', isLessThan: Timestamp.fromDate(end))
+        .orderBy('dataInicio')
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => Task.fromJson(doc.data() as Map<String, dynamic>))
+            .toList());
+  }
+
   /// Obter tarefas de hoje (Stream)
   Stream<List<Task>> watchTodayTasks(String userId) {
     return watchDayTasks(userId, DateTime.now());

@@ -5,6 +5,7 @@ import 'core/services/auth_service.dart';
 import 'core/services/google_calendar_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/repositories/task_firestore_repository.dart';
+import 'core/config/app_config.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/auth/presentation/bloc/auth_event.dart';
 import 'features/auth/presentation/bloc/auth_state.dart';
@@ -14,9 +15,15 @@ import 'features/tasks/presentation/bloc/task_bloc.dart';
 import 'shared/theme/app_theme.dart';
 import 'features/notes/presentation/bloc/note_bloc.dart';
 import 'features/notes/data/repositories/note_firestore_repository.dart';
+import 'features/notes/presentation/screens/note_list_screen.dart';
+import 'features/tasks/presentation/screens/task_list_screen.dart';
+import 'features/tasks/presentation/screens/execution_screen.dart';
 
 class NotarioApp extends StatelessWidget {
   final SharedPreferences prefs;
+
+  static final GlobalKey<NavigatorState> _navigatorKey =
+      GlobalKey<NavigatorState>();
 
   const NotarioApp({
     super.key,
@@ -25,6 +32,40 @@ class NotarioApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Registrar callback para navegação via notificação (payload)
+    // Mantemos simples: usa rotas nomeadas, sem router adicional.
+    final notificationService = NotificationService();
+    notificationService.setOnPayloadTap((payload) async {
+      final nav = _navigatorKey.currentState;
+      if (nav == null) return;
+
+      if (payload.startsWith('task:')) {
+        nav.pushNamed('/tasks');
+        return;
+      }
+      if (payload.startsWith('note:')) {
+        nav.pushNamed('/notes');
+        return;
+      }
+      if (payload.startsWith('execution:')) {
+        final taskId = payload.substring('execution:'.length);
+        final repo = getItMaybeRead<TaskFirestoreRepository>(nav.context);
+        if (repo == null) {
+          nav.pushNamed('/tasks');
+          return;
+        }
+        final task = await repo.getById(taskId);
+        if (task == null) {
+          nav.pushNamed('/tasks');
+          return;
+        }
+        nav.push(
+          MaterialPageRoute(builder: (_) => ExecutionScreen(task: task)),
+        );
+        return;
+      }
+    });
+
     return MultiRepositoryProvider(
       providers: [
         RepositoryProvider<AuthService>(
@@ -56,6 +97,7 @@ class NotarioApp extends StatelessWidget {
               repository: context.read<TaskFirestoreRepository>(),
               googleCalendarService: context.read<GoogleCalendarService>(),
               notificationService: context.read<NotificationService>(),
+              enableGoogleCalendar: AppConfig.enableGoogleCalendar,
             ),
           ),
           BlocProvider<NoteBloc>(
@@ -68,9 +110,14 @@ class NotarioApp extends StatelessWidget {
         child: MaterialApp(
           title: 'NOTÁRIO',
           debugShowCheckedModeBanner: false,
+          navigatorKey: _navigatorKey,
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: ThemeMode.system,
+          routes: {
+            '/tasks': (_) => const TaskListScreen(),
+            '/notes': (_) => const NoteListScreen(),
+          },
           home: BlocBuilder<AuthBloc, AuthState>(
             builder: (context, state) {
               if (state is AuthLoading || state is AuthInitial) {
@@ -91,5 +138,13 @@ class NotarioApp extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+T? getItMaybeRead<T>(BuildContext context) {
+  try {
+    return RepositoryProvider.of<T>(context);
+  } catch (_) {
+    return null;
   }
 }

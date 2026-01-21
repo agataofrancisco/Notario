@@ -2,13 +2,15 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../domain/entities/app_user.dart';
+import '../config/app_config.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: [
       'email',
-      'https://www.googleapis.com/auth/calendar',
+      if (AppConfig.enableGoogleCalendar)
+        'https://www.googleapis.com/auth/calendar',
     ],
   );
 
@@ -84,7 +86,8 @@ class AuthService {
         clientId: clientId,
         scopes: [
           'email',
-          'https://www.googleapis.com/auth/calendar',
+          if (AppConfig.enableGoogleCalendar)
+            'https://www.googleapis.com/auth/calendar',
         ],
       );
     }

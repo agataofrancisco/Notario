@@ -8,6 +8,7 @@ import '../../../tasks/domain/entities/task.dart';
 import '../../../tasks/presentation/bloc/task_bloc.dart';
 import '../../../tasks/presentation/screens/task_form_screen.dart';
 import '../../../tasks/presentation/widgets/task_list_item.dart';
+import '../../../../core/repositories/task_firestore_repository.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -45,6 +46,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           builder: (context, state) {
             final tasks = state is TaskDayLoaded ? state.tasks : const <Task>[];
             final stats = _DashboardStats.fromTasks(tasks);
+            final authState = context.read<AuthBloc>().state;
+            final userId =
+                authState is AuthAuthenticated ? authState.user.uid : null;
 
             return CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -53,6 +57,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: _DashboardHero(
                     selectedDate: _selectedDate,
                     stats: stats,
+                    userId: userId,
                     onLogoutPressed: () {
                       context.read<AuthBloc>().add(AuthLogoutRequested());
                     },
@@ -112,12 +117,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 class _DashboardHero extends StatelessWidget {
   final DateTime selectedDate;
   final _DashboardStats stats;
+  final String? userId;
   final VoidCallback onLogoutPressed;
   final ValueChanged<DateTime> onChangeDate;
 
   const _DashboardHero({
     required this.selectedDate,
     required this.stats,
+    required this.userId,
     required this.onLogoutPressed,
     required this.onChangeDate,
   });
@@ -212,6 +219,7 @@ class _DashboardHero extends StatelessWidget {
                 const SizedBox(height: 18),
                 _MiniCalendarCard(
                   selectedDate: selectedDate,
+                  userId: userId,
                   dayDotColor: stats.dayDotColor,
                   onChangeDate: onChangeDate,
                 ),
@@ -375,11 +383,13 @@ class _LegendDot extends StatelessWidget {
 
 class _MiniCalendarCard extends StatelessWidget {
   final DateTime selectedDate;
+  final String? userId;
   final Color dayDotColor;
   final ValueChanged<DateTime> onChangeDate;
 
   const _MiniCalendarCard({
     required this.selectedDate,
+    required this.userId,
     required this.dayDotColor,
     required this.onChangeDate,
   });
@@ -392,6 +402,10 @@ class _MiniCalendarCard extends StatelessWidget {
     final start = base.subtract(Duration(days: base.weekday - 1)); // segunda
     final days = List.generate(7, (i) => start.add(Duration(days: i)));
     const labels = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+
+    final repo = context.read<TaskFirestoreRepository>();
+    final startRange = start;
+    final endRange = start.add(const Duration(days: 7));
 
     return Container(
       margin: const EdgeInsets.only(top: 6),
@@ -407,72 +421,142 @@ class _MiniCalendarCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: List.generate(7, (index) {
-          final d = days[index];
-          final isSelected = DateUtils.isSameDay(d, selectedDate);
-          final isToday = DateUtils.isSameDay(d, DateTime.now());
-
-          // MVP: só o dia selecionado recebe “estado” real.
-          // Os outros dias ficam neutros, mas o layout já está pronto.
-          final dotColor = isSelected ? dayDotColor : Colors.grey.shade300;
-
-          return InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: () => onChangeDate(d),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    labels[index],
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 26,
-                    height: 26,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: (isSelected || isToday)
-                          ? Border.all(
-                              color: isSelected
-                                  ? const Color(0xFFFF7A5C)
-                                  : Colors.grey.shade400,
-                              width: 2,
-                            )
-                          : null,
-                    ),
-                    child: Text(
-                      '${d.day}',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: isSelected ? Colors.black : Colors.grey.shade700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: dotColor,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ],
+      child: StreamBuilder<List<Task>>(
+        stream: userId == null
+            ? null
+            : repo.watchRangeTasks(
+                userId: userId!,
+                startInclusive: startRange,
+                endExclusive: endRange,
               ),
-            ),
+        builder: (context, snapshot) {
+          final rangeTasks = snapshot.data ?? const <Task>[];
+          final dotByDay = _DayDots.buildDotMap(
+            start: startRange,
+            days: 7,
+            tasks: rangeTasks,
+            selectedDate: selectedDate,
+            selectedDotColor: dayDotColor,
           );
-        }),
+
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(7, (index) {
+              final d = days[index];
+              final isSelected = DateUtils.isSameDay(d, selectedDate);
+              final isToday = DateUtils.isSameDay(d, DateTime.now());
+
+              final dotColor = dotByDay[_DayDots.keyOf(d)] ?? Colors.grey.shade300;
+
+              return InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => onChangeDate(d),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        labels[index],
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: 26,
+                        height: 26,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: (isSelected || isToday)
+                              ? Border.all(
+                                  color: isSelected
+                                      ? const Color(0xFFFF7A5C)
+                                      : Colors.grey.shade400,
+                                  width: 2,
+                                )
+                              : null,
+                        ),
+                        child: Text(
+                          '${d.day}',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: isSelected ? Colors.black : Colors.grey.shade700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: dotColor,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          );
+        },
       ),
     );
+  }
+}
+
+class _DayDots {
+  static String keyOf(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  static Map<String, Color> buildDotMap({
+    required DateTime start,
+    required int days,
+    required List<Task> tasks,
+    required DateTime selectedDate,
+    required Color selectedDotColor,
+  }) {
+    const totalUsefulMinutes = 960;
+    final map = <String, Color>{};
+
+    // Agrupar por dia
+    final byDay = <String, List<Task>>{};
+    for (final t in tasks) {
+      final k = keyOf(t.dataInicio);
+      (byDay[k] ??= []).add(t);
+    }
+
+    for (int i = 0; i < days; i++) {
+      final day = start.add(Duration(days: i));
+      final k = keyOf(day);
+      final dayTasks = byDay[k] ?? const <Task>[];
+
+      final occupied = dayTasks
+          .where((t) =>
+              t.estado == EstadoTarefa.pendente ||
+              t.estado == EstadoTarefa.emExecucao)
+          .fold<int>(0, (sum, t) => sum + t.duracaoMinutos);
+
+      // Regras do PRD:
+      // - 🔴 Vermelho: Dia Cheio
+      // - 🔵 Azul: Espaço Disponível
+      // - 🟢 Verde: Dia Livre
+      final color = occupied <= 0
+          ? const Color(0xFF2ECC71) // verde
+          : (occupied / totalUsefulMinutes) >= 0.9
+              ? const Color(0xFFE53935) // vermelho
+              : const Color(0xFF2B5BC7); // azul
+
+      map[k] = color;
+    }
+
+    // Dia selecionado: mantém coerência com o header
+    map[keyOf(selectedDate)] = selectedDotColor;
+
+    return map;
   }
 }
 

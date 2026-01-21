@@ -185,15 +185,18 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
   final TaskFirestoreRepository _repository;
   final GoogleCalendarService _googleCalendarService;
   final NotificationService _notificationService;
+  final bool _enableGoogleCalendar;
 
   TaskBloc({
     required TaskFirestoreRepository repository,
     required GoogleCalendarService googleCalendarService,
     required NotificationService notificationService,
+    bool enableGoogleCalendar = false,
   })
       : _repository = repository,
         _googleCalendarService = googleCalendarService,
         _notificationService = notificationService,
+        _enableGoogleCalendar = enableGoogleCalendar,
         super(TaskInitial()) {
     on<TaskLoadRequested>(_onLoadRequested);
     on<TaskDayLoadRequested>(_onDayLoadRequested);
@@ -246,20 +249,22 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
     try {
       var taskToSave = event.task;
 
-      // 1) Tenta criar evento no Google Calendar (não bloqueia o salvamento)
-      try {
-        final createdEvent = await _googleCalendarService.createEventFromTask(
-          title: taskToSave.titulo,
-          description: taskToSave.descricao,
-          startTime: taskToSave.dataInicio,
-          durationMinutes: taskToSave.duracaoMinutos,
-        );
-        taskToSave = taskToSave.copyWith(
-          googleEventId: createdEvent.id,
-          sincronizado: true,
-        );
-      } catch (_) {
-        taskToSave = taskToSave.copyWith(sincronizado: false);
+      // 1) (Opcional) Criar evento no Google Calendar (não bloqueia o salvamento)
+      if (_enableGoogleCalendar) {
+        try {
+          final createdEvent = await _googleCalendarService.createEventFromTask(
+            title: taskToSave.titulo,
+            description: taskToSave.descricao,
+            startTime: taskToSave.dataInicio,
+            durationMinutes: taskToSave.duracaoMinutos,
+          );
+          taskToSave = taskToSave.copyWith(
+            googleEventId: createdEvent.id,
+            sincronizado: true,
+          );
+        } catch (_) {
+          taskToSave = taskToSave.copyWith(sincronizado: false);
+        }
       }
 
       // 2) Persistir no Firestore
@@ -285,32 +290,35 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
     try {
       var taskToSave = event.task;
 
-      // 1) Atualizar / criar evento no Google Calendar (não bloqueia o salvamento)
-      try {
-        if (taskToSave.googleEventId != null &&
-            taskToSave.googleEventId!.isNotEmpty) {
-          await _googleCalendarService.updateEvent(
-            eventId: taskToSave.googleEventId!,
-            title: taskToSave.titulo,
-            description: taskToSave.descricao,
-            startTime: taskToSave.dataInicio,
-            durationMinutes: taskToSave.duracaoMinutos,
-          );
-          taskToSave = taskToSave.copyWith(sincronizado: true);
-        } else {
-          final createdEvent = await _googleCalendarService.createEventFromTask(
-            title: taskToSave.titulo,
-            description: taskToSave.descricao,
-            startTime: taskToSave.dataInicio,
-            durationMinutes: taskToSave.duracaoMinutos,
-          );
-          taskToSave = taskToSave.copyWith(
-            googleEventId: createdEvent.id,
-            sincronizado: true,
-          );
+      // 1) (Opcional) Atualizar / criar evento no Google Calendar (não bloqueia o salvamento)
+      if (_enableGoogleCalendar) {
+        try {
+          if (taskToSave.googleEventId != null &&
+              taskToSave.googleEventId!.isNotEmpty) {
+            await _googleCalendarService.updateEvent(
+              eventId: taskToSave.googleEventId!,
+              title: taskToSave.titulo,
+              description: taskToSave.descricao,
+              startTime: taskToSave.dataInicio,
+              durationMinutes: taskToSave.duracaoMinutos,
+            );
+            taskToSave = taskToSave.copyWith(sincronizado: true);
+          } else {
+            final createdEvent =
+                await _googleCalendarService.createEventFromTask(
+              title: taskToSave.titulo,
+              description: taskToSave.descricao,
+              startTime: taskToSave.dataInicio,
+              durationMinutes: taskToSave.duracaoMinutos,
+            );
+            taskToSave = taskToSave.copyWith(
+              googleEventId: createdEvent.id,
+              sincronizado: true,
+            );
+          }
+        } catch (_) {
+          taskToSave = taskToSave.copyWith(sincronizado: false);
         }
-      } catch (_) {
-        taskToSave = taskToSave.copyWith(sincronizado: false);
       }
 
       // 2) Persistir no Firestore
@@ -337,7 +345,9 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
     try {
       // Buscar tarefa para tentar remover eventId e cancelar lembrete
       final task = await _repository.getById(event.taskId);
-      if (task?.googleEventId != null && task!.googleEventId!.isNotEmpty) {
+      if (_enableGoogleCalendar &&
+          task?.googleEventId != null &&
+          task!.googleEventId!.isNotEmpty) {
         try {
           await _googleCalendarService.deleteEvent(task.googleEventId!);
         } catch (_) {

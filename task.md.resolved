@@ -1,45 +1,71 @@
-# Tasks - Notário Project
+# Tasks - Notário Project (Backlog Vivo)
 
-## Phase 1: Foundation & Setup
+> Regra: só marco ✅ quando estiver **realmente** no código a funcionar.
+> Google Calendar/OAuth fica **FUTURO** até autorização (feature flag `ENABLE_GOOGLE_CALENDAR`).
 
-- [x] Review and fix existing Project Structure <!-- id: 10 -->
-- [x] Implement App Theme (Colors, Fonts, Dark Mode) <!-- id: 11 -->
-- [x] Setup Splash Screen & App Icon using `notariologo.png` <!-- id: 13 -->
+## Phase 0: Regras do Produto (PRD -> Código)
 
-## Phase 2: Core Services (Local First)
+- [x] Consolidar PRD e visão do projecto como fonte da verdade <!-- id: 1 -->
+- [x] Definir que Google Calendar é FUTURO (sem OAuth por enquanto) <!-- id: 2 -->
 
-- [x] Implement Local Database (Drift/Sqflite) for Activities & Notes <!-- id: 21 -->
-- [x] Create Notification Service (Local Notifications) <!-- id: 22 -->
-- [ ] (Future) Implement Google Calendar Service <!-- id: 20 -->
+## Phase 1: Fundação & Setup
 
-## Phase 3: Feature - Activities (Management)
+- [x] Estrutura base do projecto (features + core) está organizada <!-- id: 10 -->
+- [x] Tema (Material 3 + fonte) <!-- id: 11 -->
+- [ ] Splash Screen & App Icon (confirmar no build real) <!-- id: 13 -->
 
-- [ ] Define Activity Entity & Repository <!-- id: 30 -->
-- [ ] Implement "Overload Control" Logic (Time Availability Check) <!-- id: 31 -->
-- [ ] Build Activity Creation/Edit Screen <!-- id: 32 -->
-- [ ] Implement Activity List View <!-- id: 33 -->
+## Phase 2: Core Services (Local-First / Firestore-first)
 
-## Phase 4: Feature - Execution (Focus Mode)
+- [x] Notificações locais (agendar lembrete de tarefa e nota) <!-- id: 22 -->
+- [x] Feature flag `ENABLE_GOOGLE_CALENDAR` (desliga Calendar por padrão) <!-- id: 23 -->
+- [ ] Handler de payload de notificação (abrir task/note/execution na tela certa) <!-- id: 24 -->
 
-- [ ] Build Execution Screen (Hourglass Animation UI) <!-- id: 40 -->
-- [ ] Implement Timer Logic (Start, Pause, Resume) <!-- id: 41 -->
-- [ ] Implement "Skip/Reschedule" Logic <!-- id: 42 -->
-- [ ] Connect Execution Events to Status Updates <!-- id: 43 -->
+### Google Calendar (FUTURO)
+- [ ] OAuth aprovado + credenciais prontas <!-- id: 20 -->
+- [ ] Ligar sync bidirecional (app <-> calendar) <!-- id: 25 -->
 
-## Phase 5: Feature - Notes
+## Phase 3: Actividades (Tasks) - Gestão
 
-- [ ] Define Note Entity & Repository <!-- id: 50 -->
-- [ ] Build Note Creation Screen <!-- id: 51 -->
-- [ ] Implement Note Integration with Calendar Events <!-- id: 52 -->
+### Modelo / Persistência
+- [x] Entidade `Task` com prioridade/estado/duração/avisos <!-- id: 30 -->
+- [x] Repositório Firestore de tarefas (CRUD + streams) <!-- id: 31a -->
+
+### UI
+- [x] Formulário criar/editar tarefa (MVP) <!-- id: 32 -->
+- [x] Lista de tarefas (MVP) <!-- id: 33 -->
+- [x] Dashboard lista tarefas do dia (MVP) <!-- id: 33a -->
+
+### Sobrecarga (Time Live)
+- [x] Validação de dia (backend) com sugestão de dias alternativos <!-- id: 31 -->
+- [x] UI “Validar Dia” no formulário <!-- id: 31b -->
+- [ ] Bloquear “Salvar” quando não viável (hoje ainda dá para salvar sem validar) <!-- id: 31c -->
+
+## Phase 4: Execução (Modo Foco / Anti-transe)
+
+- [x] `ExecutionScreen` com timer + pause/resume + concluir <!-- id: 40 -->
+- [ ] Confirmação ao sair do modo foco (evitar abandono acidental) <!-- id: 40b -->
+- [ ] Botão “Pular” com impacto (mostrar consequências e reagendar) <!-- id: 42 -->
+- [ ] Prompt “Pronto para iniciar?” ao abrir o app perto da hora <!-- id: 43 -->
+- [ ] Notificações de “tempo acabou” + ações rápidas (se suportado) <!-- id: 44 -->
+
+## Phase 5: Notas (Core do produto)
+
+- [ ] Entidade `Note` (titulo/descricao/reminderTime/googleEventId) <!-- id: 50 -->
+- [ ] Repositório Firestore de notas (CRUD + streams) <!-- id: 50a -->
+- [ ] UI: criar/editar nota (MVP) <!-- id: 51 -->
+- [ ] UI: lista de notas + editar <!-- id: 51a -->
+- [ ] Agendar lembrete local ao criar/editar/apagar nota <!-- id: 52a -->
+- [ ] (FUTURO) Nota vira evento no Google Calendar <!-- id: 52 -->
 
 ## Phase 6: Dashboard & Analytics
 
-- [ ] Build Main Dashboard UI (Visual Calendar Indicators) <!-- id: 60 -->
-- [ ] Implement Daily Stats Logic (Success/Failure Calculation) <!-- id: 61 -->
-- [ ] Create History/Stats Screen <!-- id: 62 -->
+- [x] Dashboard “premium” (gradiente, progresso, mini-calendário, CTA) <!-- id: 60 -->
+- [ ] Mini-calendário: bolinhas reais por dia (7 dias) vermelho/azul/verde <!-- id: 60a -->
+- [ ] Cálculo do “estado do dia” (adiantado/no prazo/atrasado) com base no relógio <!-- id: 61 -->
+- [ ] Histórico / Estatísticas (dias vitoriosos, streak, % execução) <!-- id: 62 -->
 
-## Phase 7: Polish & Launch
+## Phase 7: Polimento & Lançamento
 
-- [ ] Final UI Polish (Animations, Transitions) <!-- id: 70 -->
-- [ ] Comprehensive Testing (Offline Sync, Notifications) <!-- id: 71 -->
-- [ ] Prepare for Release <!-- id: 72 -->
+- [ ] Micro-animações (transições, cards, FAB) <!-- id: 70 -->
+- [ ] Checklist de permissões/notifications por plataforma <!-- id: 71 -->
+- [ ] Build/release (Android) <!-- id: 72 -->

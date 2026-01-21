@@ -30,4 +30,11 @@ class AppConfig {
   static const String userCacheKey = 'cached_user';
   static const String tokenCacheKey = 'jwt_token';
   static const String lastSyncKey = 'last_sync_time';
+
+  /// Feature flag: integração com Google Calendar (OAuth) — mantém false por padrão
+  /// Ativar com: `--dart-define=ENABLE_GOOGLE_CALENDAR=true`
+  static const bool enableGoogleCalendar = bool.fromEnvironment(
+    'ENABLE_GOOGLE_CALENDAR',
+    defaultValue: false,
+  );
 }

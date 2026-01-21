@@ -12,6 +12,7 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
+  void Function(String payload)? _onPayloadTap;
 
   /// Inicializar serviço de notificações
   Future<void> initialize() async {
@@ -44,10 +45,20 @@ class NotificationService {
     _initialized = true;
   }
 
+  /// Registrar callback para quando o usuário tocar na notificação.
+  /// Exemplo de payloads:
+  /// - task:<taskId>
+  /// - note:<noteId>
+  /// - execution:<taskId>
+  void setOnPayloadTap(void Function(String payload) handler) {
+    _onPayloadTap = handler;
+  }
+
   /// Callback quando notificação é tocada
   void _onNotificationTapped(NotificationResponse response) {
-    // TODO: Navegar para tela apropriada baseado no payload
-    print('Notificação tocada: ${response.payload}');
+    final payload = response.payload;
+    if (payload == null || payload.isEmpty) return;
+    _onPayloadTap?.call(payload);
   }
 
   /// Agendar notificação de tarefa (15 min antes)
