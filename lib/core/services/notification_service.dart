@@ -42,7 +42,37 @@ class NotificationService {
       onDidReceiveNotificationResponse: _onNotificationTapped,
     );
 
+    // Solicitar permissões no Android 13+ (API 33+)
+    await _requestPermissions();
+
     _initialized = true;
+  }
+
+  /// Solicitar permissões necessárias
+  Future<void> _requestPermissions() async {
+    // Android 13+ requer permissão explícita para notificações
+    final androidPlugin = _notifications.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+
+    if (androidPlugin != null) {
+      // Solicitar permissão para notificações
+      await androidPlugin.requestNotificationsPermission();
+
+      // Solicitar permissão para alarmes exatos (Android 12+)
+      await androidPlugin.requestExactAlarmsPermission();
+    }
+
+    // iOS - permissões já solicitadas na inicialização
+    final iosPlugin = _notifications.resolvePlatformSpecificImplementation<
+        IOSFlutterLocalNotificationsPlugin>();
+
+    if (iosPlugin != null) {
+      await iosPlugin.requestPermissions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+    }
   }
 
   /// Registrar callback para quando o usuário tocar na notificação.
@@ -263,5 +293,143 @@ class NotificationService {
         );
 
     return result ?? true;
+  }
+
+  /// Agendar notificações semanais (domingo às 20h)
+  Future<void> scheduleWeeklyNotifications({
+    required String userId,
+    required Map<String, dynamic> weeklyStats,
+  }) async {
+    if (!_initialized) await initialize();
+
+    final now = DateTime.now();
+
+    // Calcular próximo domingo às 20h
+    final daysUntilSunday = (7 - now.weekday) % 7;
+    final nextSunday =
+        now.add(Duration(days: daysUntilSunday == 0 ? 7 : daysUntilSunday));
+    final notificationTime = DateTime(
+      nextSunday.year,
+      nextSunday.month,
+      nextSunday.day,
+      20, // 20h
+      0,
+    );
+
+    // Se já passou das 20h de domingo, agendar para próximo domingo
+    final finalTime = notificationTime.isBefore(now)
+        ? notificationTime.add(const Duration(days: 7))
+        : notificationTime;
+
+    final tarefasDefinidas = weeklyStats['tarefasDefinidas'] as int;
+    final tarefasConcluidas = weeklyStats['tarefasConcluidas'] as int;
+    final percentualConclusao = weeklyStats['percentualConclusao'] as int;
+
+    String title = 'Resumo Semanal 📊';
+    String body;
+
+    if (tarefasDefinidas == 0) {
+      body =
+          'Nenhuma tarefa foi definida esta semana. Que tal planejar a próxima?';
+    } else {
+      body =
+          'Definidas: $tarefasDefinidas | Concluídas: $tarefasConcluidas ($percentualConclusao%)';
+
+      if (percentualConclusao >= 80) {
+        body += ' 🎉 Excelente semana!';
+      } else if (percentualConclusao >= 60) {
+        body += ' 👍 Boa semana!';
+      } else if (percentualConclusao >= 40) {
+        body += ' 💪 Pode melhorar!';
+      } else {
+        body += ' 🎯 Foque na próxima semana!';
+      }
+    }
+
+    await _notifications.zonedSchedule(
+      'weekly_summary'.hashCode,
+      title,
+      body,
+      tz.TZDateTime.from(finalTime, tz.local),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'weekly_summary',
+          'Resumo Semanal',
+          channelDescription:
+              'Notificações com resumo semanal de produtividade',
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+          icon: '@mipmap/ic_launcher',
+          styleInformation: BigTextStyleInformation(''),
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: 'weekly_summary:$userId',
+    );
+  }
+
+  /// Agendar notificação de planejamento semanal (domingo às 19h)
+  Future<void> scheduleWeeklyPlanningReminder({
+    required String userId,
+  }) async {
+    if (!_initialized) await initialize();
+
+    final now = DateTime.now();
+
+    // Calcular próximo domingo às 19h
+    final daysUntilSunday = (7 - now.weekday) % 7;
+    final nextSunday =
+        now.add(Duration(days: daysUntilSunday == 0 ? 7 : daysUntilSunday));
+    final notificationTime = DateTime(
+      nextSunday.year,
+      nextSunday.month,
+      nextSunday.day,
+      19, // 19h
+      0,
+    );
+
+    // Se já passou das 19h de domingo, agendar para próximo domingo
+    final finalTime = notificationTime.isBefore(now)
+        ? notificationTime.add(const Duration(days: 7))
+        : notificationTime;
+
+    await _notifications.zonedSchedule(
+      'weekly_planning'.hashCode,
+      'Hora de Planejar! 📅',
+      'Reserve um tempo para organizar as tarefas da próxima semana.',
+      tz.TZDateTime.from(finalTime, tz.local),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'weekly_planning',
+          'Planejamento Semanal',
+          channelDescription: 'Lembretes para planejar a semana',
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: 'weekly_planning:$userId',
+    );
+  }
+
+  /// Cancelar notificações semanais
+  Future<void> cancelWeeklyNotifications() async {
+    await _notifications.cancel('weekly_summary'.hashCode);
+    await _notifications.cancel('weekly_planning'.hashCode);
   }
 }

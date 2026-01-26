@@ -37,4 +37,18 @@ class AppConfig {
     'ENABLE_GOOGLE_CALENDAR',
     defaultValue: false,
   );
+
+  // --- Integração Notion ---
+  static const String notionApiUrl = 'https://api.notion.com/v1';
+  static const String notionApiVersion = '2022-06-28';
+
+  // Token fornecido pelo usuário
+  static const String notionApiToken =
+      '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';
+
+  // TODO: Usuário deve preencher estes IDs
+  static const String notionTaskDatabaseId =
+      ''; // Preencha com o ID do banco de dados de Tarefas
+  static const String notionNoteDatabaseId =
+      ''; // Preencha com o ID do banco de dados de Notas
 }

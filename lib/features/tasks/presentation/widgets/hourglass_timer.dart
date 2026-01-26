@@ -75,7 +75,6 @@ class _HourglassPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
     final cx = w / 2;
-    final cy = h / 2;
 
     final paint = Paint()
       ..color = color

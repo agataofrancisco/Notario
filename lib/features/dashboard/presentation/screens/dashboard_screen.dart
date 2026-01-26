@@ -8,7 +8,8 @@ import '../../../tasks/domain/entities/task.dart';
 import '../../../tasks/presentation/bloc/task_bloc.dart';
 import '../../../tasks/presentation/screens/task_form_screen.dart';
 import '../../../tasks/presentation/widgets/task_list_item.dart';
-import '../../../../core/repositories/task_firestore_repository.dart';
+import '../bloc/stats_bloc.dart';
+import '../widgets/weekly_summary_card.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -24,6 +25,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _loadTasksForSelectedDate();
+    _loadWeeklyStats();
   }
 
   void _loadTasksForSelectedDate() {
@@ -35,80 +37,111 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  void _loadWeeklyStats() {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is AuthAuthenticated) {
+      final weekStart = _getWeekStart(DateTime.now());
+      context.read<StatsBloc>().add(
+            StatsLoadRequested(authState.user.uid, weekStart: weekStart),
+          );
+    }
+  }
+
+  DateTime _getWeekStart(DateTime date) {
+    final weekday = date.weekday;
+    return DateTime(date.year, date.month, date.day)
+        .subtract(Duration(days: weekday - 1));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
-      body: RefreshIndicator(
-        onRefresh: () async => _loadTasksForSelectedDate(),
-        child: BlocBuilder<TaskBloc, TaskState>(
-          builder: (context, state) {
-            final tasks = state is TaskDayLoaded ? state.tasks : const <Task>[];
-            final stats = _DashboardStats.fromTasks(tasks);
-            final authState = context.read<AuthBloc>().state;
-            final userId =
-                authState is AuthAuthenticated ? authState.user.uid : null;
+      body: BlocListener<TaskBloc, TaskState>(
+        listener: (context, state) {
+          if (state is TaskOperationSuccess) {
+            _loadTasksForSelectedDate();
+          }
+        },
+        child: RefreshIndicator(
+          onRefresh: () async => _loadTasksForSelectedDate(),
+          child: BlocBuilder<TaskBloc, TaskState>(
+            builder: (context, state) {
+              final allTasks =
+                  state is TaskDayLoaded ? state.tasks : const <Task>[];
+              final pendingTasks = allTasks
+                  .where((t) =>
+                      t.estado == EstadoTarefa.pendente ||
+                      t.estado == EstadoTarefa.emExecucao)
+                  .toList();
+              final stats = _DashboardStats.fromTasks(allTasks);
+              final authState = context.read<AuthBloc>().state;
+              final userId =
+                  authState is AuthAuthenticated ? authState.user.uid : null;
 
-            return CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverToBoxAdapter(
-                  child: _DashboardHero(
-                    selectedDate: _selectedDate,
-                    stats: stats,
-                    userId: userId,
-                    onLogoutPressed: () {
-                      context.read<AuthBloc>().add(AuthLogoutRequested());
-                    },
-                    onChangeDate: (date) {
-                      setState(() => _selectedDate = date);
-                      _loadTasksForSelectedDate();
-                    },
-                  ),
-                ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                  sliver: SliverToBoxAdapter(
-                    child: Text(
-                      'Próximas Actividades',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+              return CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: _DashboardHero(
+                      selectedDate: _selectedDate,
+                      stats: stats,
+                      userId: userId,
+                      onLogoutPressed: () {
+                        context.read<AuthBloc>().add(AuthLogoutRequested());
+                      },
+                      onChangeDate: (date) {
+                        setState(() => _selectedDate = date);
+                        _loadTasksForSelectedDate();
+                      },
                     ),
                   ),
-                ),
-                if (state is TaskLoading)
-                  const SliverFillRemaining(
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else if (state is TaskError)
-                  SliverFillRemaining(
-                    child: Center(child: Text('Erro: ${state.message}')),
-                  )
-                else if (tasks.isEmpty)
-                  SliverFillRemaining(child: _EmptyState())
-                else
                   SliverPadding(
-                    padding: const EdgeInsets.only(bottom: 120),
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) => TaskListItem(task: tasks[index]),
-                        childCount: tasks.length,
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    sliver: SliverToBoxAdapter(
+                      child: Text(
+                        'Próximas Actividades',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                       ),
                     ),
                   ),
-              ],
-            );
-          },
+                  if (state is TaskLoading)
+                    const SliverFillRemaining(
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (state is TaskError)
+                    SliverFillRemaining(
+                      child: Center(child: Text('Erro: ${state.message}')),
+                    )
+                  else if (pendingTasks.isEmpty)
+                    SliverFillRemaining(child: _EmptyState())
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.only(bottom: 120),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) =>
+                              TaskListItem(task: pendingTasks[index]),
+                          childCount: pendingTasks.length,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
         ),
       ),
-      floatingActionButton: _NotarioFab(
+      floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const TaskFormScreen(task: null)),
           );
         },
+        elevation: 6,
+        backgroundColor: const Color(0xFFFF7A5C),
+        child: const Icon(Icons.add, size: 32, color: Colors.white),
       ),
     );
   }
@@ -129,6 +162,162 @@ class _DashboardHero extends StatelessWidget {
     required this.onChangeDate,
   });
 
+  void _showWeeklyStats(BuildContext context) {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return;
+
+    final now = DateTime.now();
+    final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+    final mondayStart =
+        DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+
+    context.read<TaskBloc>().add(
+          TaskWeeklyStatsRequested(
+            userId: authState.user.uid,
+            weekStart: mondayStart,
+          ),
+        );
+
+    showDialog(
+      context: context,
+      builder: (context) => BlocListener<TaskBloc, TaskState>(
+        listener: (context, state) {
+          if (state is TaskWeeklyStatsResult) {
+            Navigator.of(context).pop();
+            _showWeeklyStatsDialog(context, state.stats);
+          }
+        },
+        child: const AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Carregando estatísticas...'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showWeeklyStatsDialog(
+      BuildContext context, Map<String, dynamic> stats) {
+    final tarefasDefinidas = stats['tarefasDefinidas'] as int;
+    final tarefasConcluidas = stats['tarefasConcluidas'] as int;
+    final tarefasPendentes = stats['tarefasPendentes'] as int;
+    final tarefasPuladas = stats['tarefasPuladas'] as int;
+    final percentualConclusao = stats['percentualConclusao'] as int;
+    final tempoPlaneado = stats['tempoPlaneadoMinutos'] as int;
+    final tempoRealizado = stats['tempoRealizadoMinutos'] as int;
+    final eficienciaTempo = stats['eficienciaTempo'] as int;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.analytics, color: Colors.blue),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Estatísticas da Semana',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildStatCard('Tarefas Definidas', tarefasDefinidas.toString(),
+                  Icons.assignment, Colors.blue),
+              const SizedBox(height: 8),
+              _buildStatCard(
+                  'Tarefas Concluídas',
+                  '$tarefasConcluidas ($percentualConclusao%)',
+                  Icons.check_circle,
+                  Colors.green),
+              const SizedBox(height: 8),
+              _buildStatCard('Tarefas Pendentes', tarefasPendentes.toString(),
+                  Icons.pending, Colors.orange),
+              const SizedBox(height: 8),
+              _buildStatCard('Tarefas Puladas', tarefasPuladas.toString(),
+                  Icons.skip_next, Colors.red),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 8),
+              _buildStatCard('Tempo Planeado', _formatTempo(tempoPlaneado),
+                  Icons.schedule, Colors.purple),
+              const SizedBox(height: 8),
+              _buildStatCard('Tempo Realizado', _formatTempo(tempoRealizado),
+                  Icons.timer, Colors.indigo),
+              const SizedBox(height: 8),
+              _buildStatCard(
+                'Eficiência de Tempo',
+                '$eficienciaTempo%',
+                Icons.trending_up,
+                eficienciaTempo >= 80
+                    ? Colors.green
+                    : eficienciaTempo >= 60
+                        ? Colors.orange
+                        : Colors.red,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Fechar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard(
+      String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style:
+                        TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                Text(value,
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: color)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTempo(int minutos) {
+    if (minutos < 60) return '${minutos}min';
+    final horas = minutos ~/ 60;
+    final mins = minutos % 60;
+    return mins == 0 ? '${horas}h' : '${horas}h ${mins}min';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -142,10 +331,7 @@ class _DashboardHero extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                Color(0xFFFF7A5C),
-                Color(0xFFFF9A62),
-              ],
+              colors: [Color(0xFFFF7A5C), Color(0xFFFF9A62)],
             ),
           ),
         ),
@@ -159,10 +345,13 @@ class _DashboardHero extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: _HeaderClock(
-                        selectedDate: selectedDate,
-                        locale: locale,
-                      ),
+                        child: _HeaderClock(
+                            selectedDate: selectedDate, locale: locale)),
+                    IconButton(
+                      onPressed: () => _showWeeklyStats(context),
+                      icon: const Icon(Icons.analytics_outlined),
+                      color: Colors.white,
+                      tooltip: 'Estatísticas Semanais',
                     ),
                     IconButton(
                       onPressed: onLogoutPressed,
@@ -177,9 +366,8 @@ class _DashboardHero extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     _ProgressRing(
-                      percent: stats.percentCompleted,
-                      label: '${stats.percentCompleted}%\nConcluído',
-                    ),
+                        percent: stats.percentCompleted,
+                        label: '${stats.percentCompleted}%\nConcluído'),
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(
@@ -188,27 +376,28 @@ class _DashboardHero extends StatelessWidget {
                           Text(
                             'Status',
                             style: theme.textTheme.titleMedium?.copyWith(
-                              color: Colors.white.withOpacity(0.9),
+                              color: Colors.white.withValues(alpha: 0.9),
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                           const SizedBox(height: 10),
                           _StatusPill(
-                            text: stats.statusLabel,
-                            backgroundColor: stats.statusColor,
-                          ),
+                              text: stats.statusLabel,
+                              backgroundColor: stats.statusColor),
                           const SizedBox(height: 10),
                           _StatusPill(
-                            text: stats.freeTimeLabel,
-                            backgroundColor: const Color(0xFF2B5BC7),
-                          ),
+                              text: stats.freeTimeLabel,
+                              backgroundColor: const Color(0xFF2B5BC7)),
                           const SizedBox(height: 14),
                           const Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
-                              _LegendDot(color: Color(0xFF2B5BC7), label: 'espaço\ndisponível'),
+                              _LegendDot(
+                                  color: Color(0xFF2B5BC7),
+                                  label: 'espaço\ndisponível'),
                               SizedBox(width: 14),
-                              _LegendDot(color: Color(0xFFE53935), label: 'cheio'),
+                              _LegendDot(
+                                  color: Color(0xFFE53935), label: 'cheio'),
                             ],
                           ),
                         ],
@@ -247,22 +436,17 @@ class _HeaderClock extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          dateStr,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        Text(dateStr,
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w600)),
         const SizedBox(height: 4),
         Text(
           timeStr,
           style: const TextStyle(
-            color: Colors.white,
-            fontSize: 44,
-            height: 1.0,
-            fontWeight: FontWeight.w800,
-          ),
+              color: Colors.white,
+              fontSize: 44,
+              height: 1.0,
+              fontWeight: FontWeight.w800),
         ),
       ],
     );
@@ -291,8 +475,8 @@ class _ProgressRing extends StatelessWidget {
             child: CircularProgressIndicator(
               value: 1,
               strokeWidth: 14,
-              valueColor:
-                  AlwaysStoppedAnimation<Color>(Colors.white.withOpacity(0.25)),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                  Colors.white.withValues(alpha: 0.25)),
             ),
           ),
           SizedBox(
@@ -310,9 +494,7 @@ class _ProgressRing extends StatelessWidget {
             label,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
+                color: Colors.white, fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -335,7 +517,7 @@ class _StatusPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 10,
             offset: const Offset(0, 6),
           ),
@@ -343,10 +525,8 @@ class _StatusPill extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w700,
-        ),
+        style:
+            const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -371,7 +551,7 @@ class _LegendDot extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.9),
+            color: Colors.white.withValues(alpha: 0.9),
             fontSize: 12,
             height: 1.0,
           ),
@@ -397,15 +577,11 @@ class _MiniCalendarCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final base = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
-
-    final start = base.subtract(Duration(days: base.weekday - 1)); // segunda
+    final base =
+        DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+    final start = base.subtract(Duration(days: base.weekday - 1));
     final days = List.generate(7, (i) => start.add(Duration(days: i)));
     const labels = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
-
-    final repo = context.read<TaskFirestoreRepository>();
-    final startRange = start;
-    final endRange = start.add(const Duration(days: 7));
 
     return Container(
       margin: const EdgeInsets.only(top: 6),
@@ -415,188 +591,72 @@ class _MiniCalendarCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.12),
+            color: Colors.black.withValues(alpha: 0.12),
             blurRadius: 18,
             offset: const Offset(0, 10),
           ),
         ],
       ),
-      child: StreamBuilder<List<Task>>(
-        stream: userId == null
-            ? null
-            : repo.watchRangeTasks(
-                userId: userId!,
-                startInclusive: startRange,
-                endExclusive: endRange,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: List.generate(7, (index) {
+          final d = days[index];
+          final isSelected = DateUtils.isSameDay(d, selectedDate);
+          final isToday = DateUtils.isSameDay(d, DateTime.now());
+
+          return InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => onChangeDate(d),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    labels[index],
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: 26,
+                    height: 26,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: (isSelected || isToday)
+                          ? Border.all(
+                              color: isSelected
+                                  ? const Color(0xFFFF7A5C)
+                                  : Colors.grey.shade400,
+                              width: 2,
+                            )
+                          : null,
+                    ),
+                    child: Text(
+                      '${d.day}',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: isSelected ? Colors.black : Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: isSelected ? dayDotColor : Colors.grey.shade300,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ],
               ),
-        builder: (context, snapshot) {
-          final rangeTasks = snapshot.data ?? const <Task>[];
-          final dotByDay = _DayDots.buildDotMap(
-            start: startRange,
-            days: 7,
-            tasks: rangeTasks,
-            selectedDate: selectedDate,
-            selectedDotColor: dayDotColor,
-          );
-
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(7, (index) {
-              final d = days[index];
-              final isSelected = DateUtils.isSameDay(d, selectedDate);
-              final isToday = DateUtils.isSameDay(d, DateTime.now());
-
-              final dotColor = dotByDay[_DayDots.keyOf(d)] ?? Colors.grey.shade300;
-
-              return InkWell(
-                borderRadius: BorderRadius.circular(14),
-                onTap: () => onChangeDate(d),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        labels[index],
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: Colors.grey.shade600,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        width: 26,
-                        height: 26,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: (isSelected || isToday)
-                              ? Border.all(
-                                  color: isSelected
-                                      ? const Color(0xFFFF7A5C)
-                                      : Colors.grey.shade400,
-                                  width: 2,
-                                )
-                              : null,
-                        ),
-                        child: Text(
-                          '${d.day}',
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: isSelected ? Colors.black : Colors.grey.shade700,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: dotColor,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _DayDots {
-  static String keyOf(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
-  static Map<String, Color> buildDotMap({
-    required DateTime start,
-    required int days,
-    required List<Task> tasks,
-    required DateTime selectedDate,
-    required Color selectedDotColor,
-  }) {
-    const totalUsefulMinutes = 960;
-    final map = <String, Color>{};
-
-    // Agrupar por dia
-    final byDay = <String, List<Task>>{};
-    for (final t in tasks) {
-      final k = keyOf(t.dataInicio);
-      (byDay[k] ??= []).add(t);
-    }
-
-    for (int i = 0; i < days; i++) {
-      final day = start.add(Duration(days: i));
-      final k = keyOf(day);
-      final dayTasks = byDay[k] ?? const <Task>[];
-
-      final occupied = dayTasks
-          .where((t) =>
-              t.estado == EstadoTarefa.pendente ||
-              t.estado == EstadoTarefa.emExecucao)
-          .fold<int>(0, (sum, t) => sum + t.duracaoMinutos);
-
-      // Regras do PRD:
-      // - 🔴 Vermelho: Dia Cheio
-      // - 🔵 Azul: Espaço Disponível
-      // - 🟢 Verde: Dia Livre
-      final color = occupied <= 0
-          ? const Color(0xFF2ECC71) // verde
-          : (occupied / totalUsefulMinutes) >= 0.9
-              ? const Color(0xFFE53935) // vermelho
-              : const Color(0xFF2B5BC7); // azul
-
-      map[k] = color;
-    }
-
-    // Dia selecionado: mantém coerência com o header
-    map[keyOf(selectedDate)] = selectedDotColor;
-
-    return map;
-  }
-}
-
-class _NotarioFab extends StatelessWidget {
-  final VoidCallback onPressed;
-
-  const _NotarioFab({required this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 76,
-      height: 76,
-      child: FloatingActionButton(
-        onPressed: onPressed,
-        elevation: 10,
-        backgroundColor: Colors.transparent,
-        shape: const CircleBorder(),
-        child: Container(
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFFFF7A5C),
-                Color(0xFFFFB86B),
-              ],
             ),
-          ),
-          child: Center(
-            child: Text(
-              'Notário',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-          ),
-        ),
+          );
+        }),
       ),
     );
   }
@@ -622,16 +682,34 @@ class _DashboardStats {
   });
 
   factory _DashboardStats.fromTasks(List<Task> tasks) {
-    final total = tasks.length;
-    final completed = tasks.where((t) => t.isConcluida).length;
+    // Filtrar tarefas canceladas do total
+    final validTasks = tasks.where((t) => !t.isCancelada).toList();
+    final total = validTasks.length;
+    final completed = validTasks.where((t) => t.isConcluida).length;
     final percent = total == 0 ? 0 : ((completed / total) * 100).round();
 
-    // “capacidade” (MVP): 16h úteis como já usado no validateDay
     const totalUsefulMinutes = 960;
+    // O tempo ocupado deve considerar tarefas pendentes, em execução e concluídas?
+    // "Ocupado" geralmente refere-se ao tempo indisponível. Tarefas concluídas ocuparam tempo.
+    // Mas se o objetivo é mostrar quanto tempo resta, devemos subtrair o que já foi gasto?
+    // Se "Livre" é para novas tarefas, então o tempo gasto em concluídas NÃO é livre.
+    // Portanto, devemos somar todas as tarefas ativas do dia.
+    // MAS, a implementação original somava apenas pendente e emExecucao.
+    // Se mudarmos para incluir concluídas, o gráfico de "barrinha" de status pode mudar o comportamento.
+    // Vamos manter a lógica original de "ocupado" = "planejado para fazer ainda" OU assumir que o usuário
+    // quer saber se o dia *como um todo* está cheio (incluindo o que já fez).
+    // Geralmente "Cheio" refere-se à capacidade total do dia.
+    // Vamos incluir concluídas no cálculo de ocupação para refletir a carga real do dia.
     final occupiedMinutes = tasks
-        .where((t) => t.estado == EstadoTarefa.pendente || t.estado == EstadoTarefa.emExecucao)
+        .where((t) =>
+            !t.isCancelada && // Ignorar canceladas
+            (t.estado == EstadoTarefa.pendente ||
+                t.estado == EstadoTarefa.emExecucao ||
+                t.estado == EstadoTarefa.concluida))
         .fold<int>(0, (sum, t) => sum + t.duracaoMinutos);
-    final free = (totalUsefulMinutes - occupiedMinutes).clamp(0, totalUsefulMinutes);
+
+    final free =
+        (totalUsefulMinutes - occupiedMinutes).clamp(0, totalUsefulMinutes);
 
     final isCheio = free <= 0 || (occupiedMinutes / totalUsefulMinutes) >= 0.9;
     final isApertado = (occupiedMinutes / totalUsefulMinutes) >= 0.7;
@@ -641,15 +719,14 @@ class _DashboardStats {
         : isApertado
             ? 'Apertado'
             : 'Indo bem';
-
     final statusColor = isCheio
         ? const Color(0xFFE53935)
         : isApertado
             ? const Color(0xFFFF9800)
             : const Color(0xFF3CC36B);
-
     final freeLabel = '${free.clamp(0, 999)} min livre';
-    final dotColor = isCheio ? const Color(0xFFE53935) : const Color(0xFF2B5BC7);
+    final dotColor =
+        isCheio ? const Color(0xFFE53935) : const Color(0xFF2B5BC7);
 
     return _DashboardStats(
       totalTasks: total,
@@ -663,55 +740,6 @@ class _DashboardStats {
   }
 }
 
-class _DateSelector extends StatelessWidget {
-  final DateTime selectedDate;
-  final ValueChanged<DateTime> onDateChanged;
-
-  const _DateSelector({
-    required this.selectedDate,
-    required this.onDateChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // Mantido apenas por compatibilidade com referências antigas.
-    // O novo design usa o mini-calendário no header.
-    return const SizedBox.shrink();
-  }
-}
-
-class _DaySummary extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    // Mantido apenas por compatibilidade com referências antigas.
-    // O novo design mostra “status + tempo livre” no header.
-    return const SizedBox.shrink();
-  }
-}
-
-class _SummaryItem extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-
-  const _SummaryItem(
-      {required this.label, required this.value, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(value,
-            style: Theme.of(context)
-                .textTheme
-                .headlineMedium
-                ?.copyWith(color: color, fontWeight: FontWeight.bold)),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-      ],
-    );
-  }
-}
-
 class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -720,17 +748,21 @@ class _EmptyState extends StatelessWidget {
       children: [
         Icon(Icons.check_circle_outline, size: 80, color: Colors.grey[400]),
         const SizedBox(height: 16),
-        Text('Nenhuma tarefa para hoje!',
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(color: Colors.grey[600])),
+        Text(
+          'Nenhuma tarefa para hoje!',
+          style: Theme.of(context)
+              .textTheme
+              .titleLarge
+              ?.copyWith(color: Colors.grey[600]),
+        ),
         const SizedBox(height: 8),
-        Text('Aproveite o seu dia ou adicione uma nova tarefa.',
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(color: Colors.grey[500]))
+        Text(
+          'Aproveite o seu dia ou adicione uma nova tarefa.',
+          style: Theme.of(context)
+              .textTheme
+              .bodyMedium
+              ?.copyWith(color: Colors.grey[500]),
+        )
       ],
     );
   }

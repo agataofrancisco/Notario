@@ -1,8 +1,9 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../domain/entities/note.dart';
-import '../../data/repositories/note_firestore_repository.dart';
+import '../../data/repositories/note_repository.dart';
 import '../../../../core/services/notification_service.dart';
+import '../../../../core/services/notion_service.dart';
 
 // Events
 abstract class NoteEvent extends Equatable {
@@ -89,14 +90,17 @@ class NoteError extends NoteState {
 
 // BLoC
 class NoteBloc extends Bloc<NoteEvent, NoteState> {
-  final NoteFirestoreRepository _repository;
+  final NoteRepository _repository;
   final NotificationService _notificationService;
+  final NotionService _notionService;
 
   NoteBloc({
-    required NoteFirestoreRepository repository,
+    required NoteRepository repository,
     required NotificationService notificationService,
+    NotionService? notionService,
   })  : _repository = repository,
         _notificationService = notificationService,
+        _notionService = notionService ?? NotionService(),
         super(NoteInitial()) {
     on<NoteLoadRequested>(_onLoadRequested);
     on<NoteCreateRequested>(_onCreateRequested);
@@ -113,7 +117,8 @@ class NoteBloc extends Bloc<NoteEvent, NoteState> {
       await emit.forEach(
         _repository.watchUserNotes(event.userId),
         onData: (notes) => NoteLoaded(notes),
-        onError: (error, stackTrace) => NoteError(error.toString()),
+        onError: (error, stackTrace) =>
+            NoteError('Erro ao carregar notas: ${error.toString()}'),
       );
     } catch (e) {
       emit(NoteError('Erro ao carregar notas: ${e.toString()}'));
@@ -126,6 +131,13 @@ class NoteBloc extends Bloc<NoteEvent, NoteState> {
   ) async {
     try {
       await _repository.create(event.note);
+
+      // Sincronizar com Notion (não bloqueia)
+      try {
+        await _notionService.createNote(event.note);
+      } catch (_) {
+        // Falha silenciosa
+      }
 
       // Agendar notificação se houver lembrete
       if (event.note.lembrete != null) {

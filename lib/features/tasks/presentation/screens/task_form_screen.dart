@@ -6,6 +6,7 @@ import 'package:notario/features/auth/presentation/bloc/auth_state.dart';
 import 'package:uuid/uuid.dart';
 import '../../domain/entities/task.dart';
 import '../bloc/task_bloc.dart';
+import '../widgets/smart_rescheduling_dialog.dart';
 
 class TaskFormScreen extends StatefulWidget {
   final Task? task;
@@ -155,70 +156,91 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
   }
 
   void _showValidationResult(TaskValidationResult result) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(
-              result.viavel ? Icons.check_circle : Icons.warning,
-              color: result.viavel ? Colors.green : Colors.orange,
-            ),
-            const SizedBox(width: 8),
-            const Text('Validação de Dia'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              result.mensagem,
-              style: const TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Tempo livre: ${result.tempoLivreMinutos} min (${(result.tempoLivreMinutos / 60).toStringAsFixed(1)}h)',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.primary,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            if (result.diasAlternativos != null &&
-                result.diasAlternativos!.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              const Text(
-                'Dias alternativos:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              ...result.diasAlternativos!.map((dia) => TextButton(
-                    onPressed: () {
-                      setState(() => _startDate = dia);
-                      Navigator.pop(context);
-                    },
-                    child: Text(
-                        DateFormat('dd/MM/yyyy (EEEE)', 'pt_PT').format(dia)),
-                  )),
+    if (result.viavel) {
+      // Dia viável - pode salvar diretamente
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green),
+              const SizedBox(width: 8),
+              const Text('Dia Viável'),
             ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
           ),
-          if (result.viavel)
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(result.mensagem),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.access_time, color: Colors.green),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Tempo livre: ${result.tempoLivreMinutos} min (${(result.tempoLivreMinutos / 60).toStringAsFixed(1)}h)',
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
                 _performSave();
               },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
               child: const Text('Salvar Tarefa'),
             ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
+    } else {
+      // Dia não viável - mostrar opções de reagendamento
+      final authState = context.read<AuthBloc>().state;
+      if (authState is! AuthAuthenticated) return;
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => SmartReschedulingDialog(
+          validationResult: {
+            'viavel': result.viavel,
+            'podeReagendar': result.podeReagendar,
+            'tempoLivreMinutos': result.tempoLivreMinutos,
+            'mensagem': result.mensagem,
+            'tarefasParaMover': result.tarefasParaMover,
+            'reagendamentoSugerido': result.reagendamentoSugerido,
+            'diasAlternativos': result.diasAlternativos,
+            'tempoLiberado': result.tempoLiberado,
+          },
+          userId: authState.user.uid,
+          onReschedulingComplete: () {
+            // Após reagendamento bem-sucedido, salvar a nova tarefa
+            _performSave();
+          },
+        ),
+      );
+    }
   }
 
   @override
@@ -247,7 +269,8 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       body: BlocListener<TaskBloc, TaskState>(
         listener: (context, state) {
           if (state is TaskOperationSuccess) {
-            Navigator.pop(context);
+            Navigator.of(context).pop(); // Fechar a tela
+            // Pequeno delay para garantir que a navegação ocorreu antes do snackbar (opcional)
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(state.message)),
             );

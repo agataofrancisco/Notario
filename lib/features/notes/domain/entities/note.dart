@@ -83,4 +83,34 @@ class Note extends Equatable {
       atualizadoEm: DateTime.parse(json['atualizadoEm'] as String),
     );
   }
+
+  /// Converte para Map (SQLite)
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'user_id': userId,
+      'titulo': titulo,
+      'conteudo': conteudo,
+      'data_lembrete': lembrete?.toIso8601String(),
+      'notificacao_enviada': notificacaoEnviada ? 1 : 0,
+      'criado_em': criadoEm.toIso8601String(),
+      'atualizado_em': atualizadoEm.toIso8601String(),
+    };
+  }
+
+  /// Cria Note a partir de Map (SQLite)
+  factory Note.fromMap(Map<String, dynamic> map) {
+    return Note(
+      id: map['id'] as String,
+      userId: map['user_id'] as String,
+      titulo: map['titulo'] as String,
+      conteudo: map['conteudo'] as String,
+      lembrete: map['data_lembrete'] != null
+          ? DateTime.parse(map['data_lembrete'] as String)
+          : null,
+      notificacaoEnviada: (map['notificacao_enviada'] as int?) == 1,
+      criadoEm: DateTime.parse(map['criado_em'] as String),
+      atualizadoEm: DateTime.parse(map['atualizado_em'] as String),
+    );
+  }
 }

@@ -203,6 +203,22 @@ class Task {
     };
   }
 
+  /// Helper para parse seguro de DateTime
+  static DateTime _parseDateTime(dynamic value) {
+    if (value == null) throw ArgumentError('DateTime value cannot be null');
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.parse(value);
+    throw ArgumentError('Invalid DateTime value: $value');
+  }
+
+  /// Helper para parse seguro de DateTime nullable
+  static DateTime? _parseDateTimeNullable(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.parse(value);
+    return null;
+  }
+
   factory Task.fromMap(Map<String, dynamic> map) {
     return Task(
       id: map['id'],
@@ -210,8 +226,8 @@ class Task {
       googleEventId: map['google_event_id'],
       titulo: map['titulo'],
       descricao: map['descricao'],
-      dataInicio: DateTime.parse(map['data_inicio']),
-      dataFim: DateTime.parse(map['data_fim']),
+      dataInicio: _parseDateTime(map['data_inicio']),
+      dataFim: _parseDateTime(map['data_fim']),
       duracaoMinutos: map['duracao_minutos'],
       prioridade: Prioridade.fromJson(map['prioridade']),
       avisoAntesMinutos: map['aviso_antes_minutos'] ?? 10,
@@ -222,11 +238,9 @@ class Task {
       safetyMarginMinutes: map['safety_margin_minutes'] ?? 0,
       sincronizado: map['sincronizado'] == 1,
       versao: map['versao'] ?? 1,
-      criadoEm: DateTime.parse(map['criado_em']),
-      atualizadoEm: DateTime.parse(map['atualizado_em']),
-      concluidoEm: map['concluido_em'] != null
-          ? DateTime.parse(map['concluido_em'])
-          : null,
+      criadoEm: _parseDateTime(map['criado_em']),
+      atualizadoEm: _parseDateTime(map['atualizado_em']),
+      concluidoEm: _parseDateTimeNullable(map['concluido_em']),
       syncStatus: SyncStatus.fromJson(map['sync_status'] ?? 'synced'),
     );
   }

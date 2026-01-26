@@ -16,96 +16,149 @@ class TaskListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final Color priorityColor = _getPriorityColor(task.prioridade);
     final IconData statusIcon = _getStatusIcon(task.estado);
+    final bool isCompleted = task.isConcluida;
+    final bool isCancelled = task.isCancelada;
+    final bool isDisabled = isCompleted || isCancelled;
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: 3,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: priorityColor.withOpacity(0.7), width: 1),
-      ),
-      child: InkWell(
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => TaskFormScreen(task: task),
-            ),
-          );
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
+    return Opacity(
+      opacity: isDisabled ? 0.6 : 1.0,
+      child: Card(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        elevation: isDisabled ? 1 : 3,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+              color: isDisabled
+                  ? Colors.grey.withOpacity(0.3)
+                  : priorityColor.withOpacity(0.7),
+              width: 1),
+        ),
+        child: InkWell(
+          onTap: isDisabled
+              ? null
+              : () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => TaskFormScreen(task: task),
+                    ),
+                  );
+                },
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        task.titulo,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              decoration: isCompleted
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                              color: isDisabled ? Colors.grey : null,
+                            ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (isCompleted)
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.check_circle,
+                          color: Colors.green,
+                          size: 24,
+                        ),
+                      )
+                    else if (isCancelled)
+                      Icon(statusIcon, color: Colors.red, size: 28)
+                    else if (task.estado == EstadoTarefa.pendente ||
+                        task.estado == EstadoTarefa.emExecucao ||
+                        task.estado == EstadoTarefa.pulada)
+                      IconButton(
+                        icon: const Icon(
+                          Icons.play_circle_fill_rounded,
+                          size: 32,
+                          color: Colors.green,
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => ExecutionScreen(task: task),
+                            ),
+                          );
+                        },
+                        tooltip: 'Iniciar Execução',
+                      )
+                    else
+                      Icon(statusIcon, color: Theme.of(context).primaryColor),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (task.descricao != null && task.descricao!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
                     child: Text(
-                      task.titulo,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
+                      task.descricao!,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: isDisabled ? Colors.grey : Colors.grey[700],
+                            decoration:
+                                isCompleted ? TextDecoration.lineThrough : null,
                           ),
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  if (task.estado == EstadoTarefa.pendente ||
-                      task.estado == EstadoTarefa.emExecucao ||
-                      task.estado == EstadoTarefa.pulada)
-                    IconButton(
-                      icon: const Icon(
-                        Icons.play_circle_fill_rounded,
-                        size: 32,
-                        color: Colors.green,
-                      ),
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => ExecutionScreen(task: task),
-                          ),
-                        );
-                      },
-                      tooltip: 'Iniciar Execução',
-                    )
-                  else
-                    Icon(statusIcon, color: Theme.of(context).primaryColor),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (task.descricao != null && task.descricao!.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
-                  child: Text(
-                    task.descricao!,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.grey[700],
+                if (isCompleted && task.concluidoEm != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.check_circle_outline,
+                          size: 14, color: Colors.green),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Concluída em ${DateFormat("dd/MM/yy 'às' HH:mm", 'pt_PT').format(task.concluidoEm!)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.green[700],
+                          fontWeight: FontWeight.w500,
                         ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              const Divider(),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _buildInfoChip(
-                    context,
-                    icon: Icons.calendar_today_outlined,
-                    label: DateFormat('dd/MM/yy \'às\' HH:mm', 'pt_PT')
-                        .format(task.dataInicio),
-                  ),
-                  _buildInfoChip(
-                    context,
-                    icon: Icons.timer_outlined,
-                    label: '${task.duracaoMinutos} min',
+                      ),
+                    ],
                   ),
                 ],
-              ),
-            ],
+                const Divider(),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildInfoChip(
+                      context,
+                      icon: Icons.calendar_today_outlined,
+                      label: DateFormat("dd/MM/yy 'às' HH:mm", 'pt_PT')
+                          .format(task.dataInicio),
+                      isDisabled: isDisabled,
+                    ),
+                    _buildInfoChip(
+                      context,
+                      icon: Icons.timer_outlined,
+                      label: '${task.duracaoMinutos} min',
+                      isDisabled: isDisabled,
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -113,23 +166,28 @@ class TaskListItem extends StatelessWidget {
   }
 
   Widget _buildInfoChip(BuildContext context,
-      {required IconData icon, required String label}) {
+      {required IconData icon,
+      required String label,
+      bool isDisabled = false}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.grey.shade200,
+        color: isDisabled ? Colors.grey.shade100 : Colors.grey.shade200,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 14, color: Colors.grey.shade800),
+          Icon(icon,
+              size: 14,
+              color: isDisabled ? Colors.grey.shade400 : Colors.grey.shade800),
           const SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
-                color: Colors.grey.shade900),
+                color:
+                    isDisabled ? Colors.grey.shade500 : Colors.grey.shade900),
           ),
         ],
       ),

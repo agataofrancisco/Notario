@@ -4,6 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/google_calendar_service.dart';
 import 'core/services/notification_service.dart';
+import 'core/services/notion_service.dart';
+import 'core/services/statistics_service.dart';
+import 'core/services/weekly_notification_service.dart';
 import 'core/repositories/task_firestore_repository.dart';
 import 'core/config/app_config.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
@@ -11,10 +14,12 @@ import 'features/auth/presentation/bloc/auth_event.dart';
 import 'features/auth/presentation/bloc/auth_state.dart';
 import 'features/auth/presentation/screens/login_screen.dart';
 import 'features/dashboard/presentation/screens/dashboard_screen.dart';
+import 'features/dashboard/presentation/bloc/stats_bloc.dart';
 import 'features/tasks/presentation/bloc/task_bloc.dart';
+import 'features/tasks/data/repositories/task_repository.dart';
 import 'shared/theme/app_theme.dart';
 import 'features/notes/presentation/bloc/note_bloc.dart';
-import 'features/notes/data/repositories/note_firestore_repository.dart';
+import 'features/notes/data/repositories/note_repository.dart';
 import 'features/notes/presentation/screens/note_list_screen.dart';
 import 'features/tasks/presentation/screens/task_list_screen.dart';
 import 'features/tasks/presentation/screens/execution_screen.dart';
@@ -77,11 +82,24 @@ class NotarioApp extends StatelessWidget {
         RepositoryProvider<NotificationService>(
           create: (context) => NotificationService(),
         ),
+        RepositoryProvider<WeeklyNotificationService>(
+          create: (context) => WeeklyNotificationService(),
+        ),
         RepositoryProvider<TaskFirestoreRepository>(
           create: (context) => TaskFirestoreRepository(),
         ),
-        RepositoryProvider<NoteFirestoreRepository>(
-          create: (context) => NoteFirestoreRepository(),
+        RepositoryProvider<TaskRepository>(
+          create: (context) => TaskRepository(),
+        ),
+        RepositoryProvider<NoteRepository>(
+          create: (context) => NoteRepository(),
+        ),
+        RepositoryProvider<NotionService>(
+          create: (context) => NotionService(),
+        ),
+        RepositoryProvider<StatisticsService>(
+          create: (context) =>
+              StatisticsService(context.read<TaskRepository>()),
         ),
       ],
       child: MultiBlocProvider(
@@ -97,13 +115,20 @@ class NotarioApp extends StatelessWidget {
               repository: context.read<TaskFirestoreRepository>(),
               googleCalendarService: context.read<GoogleCalendarService>(),
               notificationService: context.read<NotificationService>(),
+              notionService: context.read<NotionService>(),
               enableGoogleCalendar: AppConfig.enableGoogleCalendar,
+            ),
+          ),
+          BlocProvider<StatsBloc>(
+            create: (context) => StatsBloc(
+              statisticsService: context.read<StatisticsService>(),
             ),
           ),
           BlocProvider<NoteBloc>(
             create: (context) => NoteBloc(
-              repository: context.read<NoteFirestoreRepository>(),
+              repository: context.read<NoteRepository>(),
               notificationService: context.read<NotificationService>(),
+              notionService: context.read<NotionService>(),
             ),
           ),
         ],
@@ -129,6 +154,15 @@ class NotarioApp extends StatelessWidget {
               }
 
               if (state is AuthAuthenticated) {
+                // Inicializar notificações semanais quando usuário estiver autenticado
+                WidgetsBinding.instance.addPostFrameCallback((_) async {
+                  final weeklyService =
+                      context.read<WeeklyNotificationService>();
+                  await weeklyService.initialize(state.user.uid);
+                  await weeklyService
+                      .checkAndSendMissedNotifications(state.user.uid);
+                });
+
                 return const DashboardScreen();
               }
 

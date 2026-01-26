@@ -34,81 +34,91 @@ class _NoteListScreenState extends State<NoteListScreen> {
       appBar: AppBar(
         title: const Text('Minhas Notas'),
       ),
-      body: BlocBuilder<NoteBloc, NoteState>(
-        builder: (context, state) {
-          if (state is NoteLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (state is NoteError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Erro ao carregar notas',
-                    style: TextStyle(fontSize: 18, color: Colors.grey[700]),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    state.message,
-                    style: TextStyle(color: Colors.grey[600]),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: _loadNotes,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Tentar Novamente'),
-                  ),
-                ],
-              ),
+      body: BlocListener<NoteBloc, NoteState>(
+        listener: (context, state) {
+          if (state is NoteOperationSuccess) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(state.message)),
             );
+            _loadNotes();
           }
+        },
+        child: BlocBuilder<NoteBloc, NoteState>(
+          builder: (context, state) {
+            if (state is NoteLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          if (state is NoteLoaded) {
-            if (state.notes.isEmpty) {
+            if (state is NoteError) {
               return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.note_add, size: 64, color: Colors.grey[300]),
+                    Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
                     const SizedBox(height: 16),
                     Text(
-                      'Nenhuma nota criada',
+                      'Erro ao carregar notas',
                       style: TextStyle(fontSize: 18, color: Colors.grey[700]),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Toque no + para criar sua primeira nota',
+                      state.message,
                       style: TextStyle(color: Colors.grey[600]),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: _loadNotes,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Tentar Novamente'),
                     ),
                   ],
                 ),
               );
             }
 
-            return RefreshIndicator(
-              onRefresh: () async => _loadNotes(),
-              child: ListView.builder(
-                padding: const EdgeInsets.all(8),
-                itemCount: state.notes.length,
-                itemBuilder: (context, index) {
-                  final note = state.notes[index];
-                  return _NoteCard(
-                    note: note,
-                    onTap: () => _navigateToForm(note),
-                    onDelete: () => _confirmDelete(note),
-                  );
-                },
-              ),
-            );
-          }
+            if (state is NoteLoaded) {
+              if (state.notes.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.note_add, size: 64, color: Colors.grey[300]),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Nenhuma nota criada',
+                        style: TextStyle(fontSize: 18, color: Colors.grey[700]),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Toque no + para criar sua primeira nota',
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                );
+              }
 
-          return const Center(child: Text('Carregando...'));
-        },
+              return RefreshIndicator(
+                onRefresh: () async => _loadNotes(),
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(8),
+                  itemCount: state.notes.length,
+                  itemBuilder: (context, index) {
+                    final note = state.notes[index];
+                    return _NoteCard(
+                      note: note,
+                      onTap: () => _navigateToForm(note),
+                      onDelete: () => _confirmDelete(note),
+                    );
+                  },
+                ),
+              );
+            }
+
+            return const Center(child: Text('Carregando...'));
+          },
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _navigateToForm(null),

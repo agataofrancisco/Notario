@@ -170,8 +170,8 @@ class TaskFirestoreRepository {
     });
   }
 
-  /// Validar se dia comporta tarefa
-  /// Retorna informações sobre viabilidade, tempo livre, e sugestões
+  /// Validar se dia comporta tarefa com sistema inteligente de reagendamento
+  /// Retorna informações sobre viabilidade, tempo livre, e sugestões de reagendamento
   Future<Map<String, dynamic>> validateDay({
     required DateTime data,
     required int duracaoMinutos,
@@ -209,7 +209,7 @@ class TaskFirestoreRepository {
       final tempoLivre = minutosUteisDia - tempoOcupado;
       final percentual = (tempoOcupado / minutosUteisDia * 100).round();
 
-      // 3. Verificar viabilidade
+      // 3. Verificar viabilidade direta
       if (tempoLivre >= duracaoMinutos) {
         return {
           'viavel': true,
@@ -221,61 +221,165 @@ class TaskFirestoreRepository {
         };
       }
 
-      // 4. Não cabe - buscar soluções
+      // 4. Não cabe - implementar sistema inteligente de reagendamento
       final faltam = duracaoMinutos - tempoLivre;
       final prioridadeAtual = _parsePrioridade(prioridade);
+      final prioridadeAtualValue = _getPrioridadeValue(prioridadeAtual);
 
-      // 4.1. Tarefas de menor prioridade
-      final tarefasParaMover = tasks
-          .where((t) =>
-              _getPrioridadeValue(t.prioridade) <
-              _getPrioridadeValue(prioridadeAtual))
+      // 4.1. Identificar tarefas de menor prioridade que podem ser movidas
+      final tarefasNegociaveis = tasks
+          .where((t) => t.isNegotiable && 
+                       _getPrioridadeValue(t.prioridade) < prioridadeAtualValue)
           .toList()
-        ..sort((a, b) => _getPrioridadeValue(a.prioridade)
-            .compareTo(_getPrioridadeValue(b.prioridade)));
-
-      int tempoLiberado = 0;
-      List<Map<String, dynamic>> sugestoes = [];
-      for (var task in tarefasParaMover) {
-        if (tempoLiberado >= faltam) break;
-        tempoLiberado += task.duracaoMinutos;
-        sugestoes.add({
-          'id': task.id,
-          'titulo': task.titulo,
-          'duracaoMinutos': task.duracaoMinutos,
-          'prioridade': task.prioridade.toJson(),
+        ..sort((a, b) {
+          // Ordenar por prioridade (menor primeiro) e depois por duração (maior primeiro)
+          final prioComp = _getPrioridadeValue(a.prioridade)
+              .compareTo(_getPrioridadeValue(b.prioridade));
+          if (prioComp != 0) return prioComp;
+          return b.duracaoMinutos.compareTo(a.duracaoMinutos);
         });
-      }
 
-      // 4.2. Dias alternativos
+      // 4.2. Calcular reagendamento inteligente
+      final reagendamento = await _calcularReagendamentoInteligente(
+        userId: userId,
+        tarefasNegociaveis: tarefasNegociaveis,
+        tempoNecessario: faltam,
+        dataOriginal: data,
+      );
+
+      // 4.3. Buscar dias alternativos
       final diasAlternativos =
           await _buscarDiasAlternativos(userId, data, duracaoMinutos);
 
-      if (sugestoes.isNotEmpty && tempoLiberado >= faltam) {
+      if (reagendamento['viavel'] == true) {
         return {
-          'viavel': false,
+          'viavel': false, // Não cabe diretamente
+          'podeReagendar': true,
           'tempoLivreMinutos': tempoLivre,
           'tempoOcupadoMinutos': tempoOcupado,
           'percentualOcupado': percentual,
-          'mensagem':
-              'Faltam ${_formatTempo(faltam)}. Sugestão: mover ${sugestoes.length} tarefa(s).',
-          'tarefasParaMover': sugestoes,
+          'mensagem': reagendamento['mensagem'],
+          'tarefasParaMover': reagendamento['tarefasParaMover'],
+          'reagendamentoSugerido': reagendamento['reagendamentoSugerido'],
           'diasAlternativos': diasAlternativos,
+          'tempoLiberado': reagendamento['tempoLiberado'],
         };
       }
 
+      // 4.4. Não há tarefas de menor prioridade suficientes
       return {
         'viavel': false,
+        'podeReagendar': false,
         'tempoLivreMinutos': tempoLivre,
         'tempoOcupadoMinutos': tempoOcupado,
         'percentualOcupado': percentual,
-        'mensagem':
-            'Não há espaço (faltam ${_formatTempo(faltam)}). Escolha outro dia.',
+        'mensagem': tarefasNegociaveis.isEmpty 
+            ? 'Dia lotado. Todas as tarefas têm prioridade igual ou superior.'
+            : 'Não há espaço suficiente mesmo movendo tarefas de menor prioridade.',
         'diasAlternativos': diasAlternativos,
+        'tarefasNegociaveis': tarefasNegociaveis.length,
       };
     } catch (e) {
       throw Exception('Erro ao validar dia: $e');
     }
+  }
+
+  /// Calcular reagendamento inteligente de tarefas
+  Future<Map<String, dynamic>> _calcularReagendamentoInteligente({
+    required String userId,
+    required List<Task> tarefasNegociaveis,
+    required int tempoNecessario,
+    required DateTime dataOriginal,
+  }) async {
+    if (tarefasNegociaveis.isEmpty) {
+      return {'viavel': false, 'mensagem': 'Nenhuma tarefa pode ser movida.'};
+    }
+
+    List<Map<String, dynamic>> tarefasParaMover = [];
+    List<Map<String, dynamic>> reagendamentoSugerido = [];
+    int tempoLiberado = 0;
+
+    // Tentar encontrar combinação ótima de tarefas para mover
+    for (var tarefa in tarefasNegociaveis) {
+      if (tempoLiberado >= tempoNecessario) break;
+
+      // Buscar melhor dia para esta tarefa
+      final melhorDia = await _encontrarMelhorDiaParaTarefa(
+        userId: userId,
+        tarefa: tarefa,
+        dataOriginal: dataOriginal,
+      );
+
+      if (melhorDia != null) {
+        tarefasParaMover.add({
+          'id': tarefa.id,
+          'titulo': tarefa.titulo,
+          'duracaoMinutos': tarefa.duracaoMinutos,
+          'prioridade': tarefa.prioridade.toJson(),
+          'dataAtual': tarefa.dataInicio.toIso8601String(),
+        });
+
+        reagendamentoSugerido.add({
+          'tarefaId': tarefa.id,
+          'titulo': tarefa.titulo,
+          'dataAtual': tarefa.dataInicio.toIso8601String(),
+          'dataSugerida': melhorDia.toIso8601String(),
+          'motivacao': 'Liberar espaço para tarefa de maior prioridade',
+        });
+
+        tempoLiberado += tarefa.duracaoMinutos;
+      }
+    }
+
+    if (tempoLiberado >= tempoNecessario) {
+      return {
+        'viavel': true,
+        'mensagem': 'Pode agendar movendo ${tarefasParaMover.length} tarefa(s) de menor prioridade.',
+        'tarefasParaMover': tarefasParaMover,
+        'reagendamentoSugerido': reagendamentoSugerido,
+        'tempoLiberado': tempoLiberado,
+      };
+    }
+
+    return {
+      'viavel': false,
+      'mensagem': 'Mesmo movendo tarefas de menor prioridade, não há espaço suficiente.',
+      'tarefasParaMover': tarefasParaMover,
+      'tempoLiberado': tempoLiberado,
+    };
+  }
+
+  /// Encontrar o melhor dia para reagendar uma tarefa
+  Future<DateTime?> _encontrarMelhorDiaParaTarefa({
+    required String userId,
+    required Task tarefa,
+    required DateTime dataOriginal,
+  }) async {
+    // Procurar nos próximos 14 dias (excluindo o dia original)
+    for (int i = 1; i <= 14; i++) {
+      final candidato = dataOriginal.add(Duration(days: i));
+      
+      // Pular fins de semana se a tarefa original era em dia útil
+      if (_isDiaUtil(dataOriginal) && !_isDiaUtil(candidato)) continue;
+
+      final validacao = await validateDay(
+        data: candidato,
+        duracaoMinutos: tarefa.duracaoMinutos,
+        prioridade: tarefa.prioridade.toJson(),
+        userId: userId,
+      );
+
+      if (validacao['viavel'] == true) {
+        return candidato;
+      }
+    }
+
+    return null;
+  }
+
+  /// Verificar se é dia útil (segunda a sexta)
+  bool _isDiaUtil(DateTime data) {
+    return data.weekday >= 1 && data.weekday <= 5;
   }
 
   Future<List<DateTime>> _buscarDiasAlternativos(
@@ -338,5 +442,117 @@ class TaskFirestoreRepository {
       batch.delete(doc.reference);
     }
     await batch.commit();
+  }
+
+  /// Executar reagendamento automático de tarefas
+  Future<Map<String, dynamic>> executarReagendamento({
+    required String userId,
+    required List<Map<String, dynamic>> reagendamentoSugerido,
+  }) async {
+    try {
+      final batch = _firestore.batch();
+      final tarefasMovidas = <Map<String, dynamic>>[];
+
+      for (var sugestao in reagendamentoSugerido) {
+        final tarefaId = sugestao['tarefaId'] as String;
+        final dataSugerida = DateTime.parse(sugestao['dataSugerida'] as String);
+        
+        // Buscar tarefa atual
+        final tarefaDoc = await _tasksCollection.doc(tarefaId).get();
+        if (!tarefaDoc.exists) continue;
+
+        final tarefa = Task.fromJson(tarefaDoc.data() as Map<String, dynamic>);
+        
+        // Calcular nova data/hora mantendo o mesmo horário
+        final novaDataInicio = DateTime(
+          dataSugerida.year,
+          dataSugerida.month,
+          dataSugerida.day,
+          tarefa.dataInicio.hour,
+          tarefa.dataInicio.minute,
+        );
+        
+        final novaDataFim = novaDataInicio.add(
+          Duration(minutes: tarefa.duracaoMinutos),
+        );
+
+        // Atualizar no batch
+        batch.update(_tasksCollection.doc(tarefaId), {
+          'dataInicio': Timestamp.fromDate(novaDataInicio),
+          'dataFim': Timestamp.fromDate(novaDataFim),
+          'atualizadoEm': FieldValue.serverTimestamp(),
+        });
+
+        tarefasMovidas.add({
+          'id': tarefaId,
+          'titulo': tarefa.titulo,
+          'dataAnterior': tarefa.dataInicio.toIso8601String(),
+          'dataNova': novaDataInicio.toIso8601String(),
+        });
+      }
+
+      // Executar todas as atualizações
+      await batch.commit();
+
+      return {
+        'sucesso': true,
+        'tarefasMovidas': tarefasMovidas,
+        'mensagem': 'Reagendamento executado com sucesso! ${tarefasMovidas.length} tarefa(s) movida(s).',
+      };
+    } catch (e) {
+      return {
+        'sucesso': false,
+        'mensagem': 'Erro ao executar reagendamento: $e',
+      };
+    }
+  }
+
+  /// Obter estatísticas semanais para notificações
+  Future<Map<String, dynamic>> getWeeklyStats(String userId, DateTime weekStart) async {
+    try {
+      final weekEnd = weekStart.add(const Duration(days: 7));
+      
+      final snapshot = await _tasksCollection
+          .where('userId', isEqualTo: userId)
+          .where('dataInicio', isGreaterThanOrEqualTo: Timestamp.fromDate(weekStart))
+          .where('dataInicio', isLessThan: Timestamp.fromDate(weekEnd))
+          .get();
+
+      final tasks = snapshot.docs
+          .map((doc) => Task.fromJson(doc.data() as Map<String, dynamic>))
+          .toList();
+
+      final tarefasDefinidas = tasks.length;
+      final tarefasConcluidas = tasks.where((t) => t.isConcluida).length;
+      final tarefasPendentes = tasks.where((t) => t.isPendente).length;
+      final tarefasPuladas = tasks.where((t) => t.isPulada).length;
+      
+      final percentualConclusao = tarefasDefinidas > 0 
+          ? (tarefasConcluidas / tarefasDefinidas * 100).round()
+          : 0;
+
+      // Tempo total planejado vs realizado
+      final tempoPlaneado = tasks.fold<int>(0, (sum, t) => sum + t.duracaoMinutos);
+      final tempoRealizado = tasks
+          .where((t) => t.isConcluida && t.tempoRealMinutos != null)
+          .fold<int>(0, (sum, t) => sum + (t.tempoRealMinutos ?? 0));
+
+      return {
+        'semanaInicio': weekStart.toIso8601String(),
+        'semanaFim': weekEnd.toIso8601String(),
+        'tarefasDefinidas': tarefasDefinidas,
+        'tarefasConcluidas': tarefasConcluidas,
+        'tarefasPendentes': tarefasPendentes,
+        'tarefasPuladas': tarefasPuladas,
+        'percentualConclusao': percentualConclusao,
+        'tempoPlaneadoMinutos': tempoPlaneado,
+        'tempoRealizadoMinutos': tempoRealizado,
+        'eficienciaTempo': tempoPlaneado > 0 
+            ? (tempoRealizado / tempoPlaneado * 100).round()
+            : 0,
+      };
+    } catch (e) {
+      throw Exception('Erro ao obter estatísticas semanais: $e');
+    }
   }
 }
