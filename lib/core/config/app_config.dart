@@ -46,9 +46,7 @@ class AppConfig {
   static const String notionApiToken =
       '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';
 
-  // TODO: Usuário deve preencher estes IDs
-  static const String notionTaskDatabaseId =
-      ''; // Preencha com o ID do banco de dados de Tarefas
-  static const String notionNoteDatabaseId =
-      ''; // Preencha com o ID do banco de dados de Notas
+  // Database ID fornecido pelo usuário
+  static const String notionTaskDatabaseId = '2f5d1889d1788087bd7bf3c712533a40';
+  static const String notionNoteDatabaseId = '2f5d1889d1788087bd7bf3c712533a40';
 }

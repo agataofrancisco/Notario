@@ -1,1 +1,31 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"notario-6961f","appId":"1:525067357557:android:3ff1c5a390dbc370b4173c","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"notario-6961f","configurations":{"android":"1:525067357557:android:3ff1c5a390dbc370b4173c","ios":"1:525067357557:ios:d0efe4dc9d0fa0a8b4173c","macos":"1:525067357557:ios:d0efe4dc9d0fa0a8b4173c","web":"1:525067357557:web:6a08cf4a02dee9f3b4173c","windows":"1:525067357557:web:95cffb8f1d081908b4173c"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "notario-6961f",
+          "appId": "1:525067357557:android:3ff1c5a390dbc370b4173c",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "notario-6961f",
+          "configurations": {
+            "android": "1:525067357557:android:3ff1c5a390dbc370b4173c",
+            "ios": "1:525067357557:ios:d0efe4dc9d0fa0a8b4173c",
+            "macos": "1:525067357557:ios:d0efe4dc9d0fa0a8b4173c",
+            "web": "1:525067357557:web:6a08cf4a02dee9f3b4173c",
+            "windows": "1:525067357557:web:95cffb8f1d081908b4173c"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "nam5",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}

@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
@@ -8,6 +10,7 @@ import '../../../tasks/domain/entities/task.dart';
 import '../../../tasks/presentation/bloc/task_bloc.dart';
 import '../../../tasks/presentation/screens/task_form_screen.dart';
 import '../../../tasks/presentation/widgets/task_list_item.dart';
+import '../../../../core/repositories/task_firestore_repository.dart';
 import '../bloc/stats_bloc.dart';
 import '../widgets/weekly_summary_card.dart';
 
@@ -140,7 +143,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           );
         },
         elevation: 6,
-        backgroundColor: const Color(0xFFFF7A5C),
+        backgroundColor: const Color(0xFF667EEA), // Primary purple
         child: const Icon(Icons.add, size: 32, color: Colors.white),
       ),
     );
@@ -331,7 +334,7 @@ class _DashboardHero extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFFFF7A5C), Color(0xFFFF9A62)],
+              colors: [Color(0xFF667EEA), Color(0xFF764BA2)], // Purple gradient
             ),
           ),
         ),
@@ -421,17 +424,44 @@ class _DashboardHero extends StatelessWidget {
   }
 }
 
-class _HeaderClock extends StatelessWidget {
+class _HeaderClock extends StatefulWidget {
   final DateTime selectedDate;
   final String locale;
 
   const _HeaderClock({required this.selectedDate, required this.locale});
 
   @override
+  State<_HeaderClock> createState() => _HeaderClockState();
+}
+
+class _HeaderClockState extends State<_HeaderClock> {
+  late DateTime _currentTime;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentTime = DateTime.now();
+    // Atualizar a cada minuto
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      final now = DateTime.now();
+      if (now.minute != _currentTime.minute) {
+        setState(() => _currentTime = now);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final timeStr = DateFormat('HH:mm', locale).format(now);
-    final dateStr = DateFormat("EEE, d 'de' MMMM", locale).format(selectedDate);
+    final timeStr = DateFormat('HH:mm', widget.locale).format(_currentTime);
+    final dateStr = DateFormat("EEE, d 'de' MMMM", widget.locale)
+        .format(widget.selectedDate);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -561,7 +591,7 @@ class _LegendDot extends StatelessWidget {
   }
 }
 
-class _MiniCalendarCard extends StatelessWidget {
+class _MiniCalendarCard extends StatefulWidget {
   final DateTime selectedDate;
   final String? userId;
   final Color dayDotColor;
@@ -575,12 +605,102 @@ class _MiniCalendarCard extends StatelessWidget {
   });
 
   @override
+  State<_MiniCalendarCard> createState() => _MiniCalendarCardState();
+}
+
+class _MiniCalendarCardState extends State<_MiniCalendarCard> {
+  DateTime _weekStart = DateTime.now();
+  Map<String, Color> _dayColors = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _weekStart = _getWeekStart(widget.selectedDate);
+    _loadWeekOccupancy();
+  }
+
+  @override
+  void didUpdateWidget(_MiniCalendarCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!DateUtils.isSameDay(oldWidget.selectedDate, widget.selectedDate)) {
+      final newWeekStart = _getWeekStart(widget.selectedDate);
+      if (!DateUtils.isSameDay(_weekStart, newWeekStart)) {
+        setState(() => _weekStart = newWeekStart);
+        _loadWeekOccupancy();
+      }
+    }
+  }
+
+  DateTime _getWeekStart(DateTime date) {
+    final base = DateTime(date.year, date.month, date.day);
+    return base.subtract(Duration(days: base.weekday - 1));
+  }
+
+  Future<void> _loadWeekOccupancy() async {
+    if (widget.userId == null) return;
+
+    final colors = <String, Color>{};
+    final weekEnd = _weekStart.add(const Duration(days: 7));
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('userId', isEqualTo: widget.userId)
+          .where('dataInicio',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(_weekStart))
+          .where('dataInicio', isLessThan: Timestamp.fromDate(weekEnd))
+          .where('estado',
+              whereIn: ['pendente', 'emExecucao', 'concluida']).get();
+
+      final tasksByDay = <String, int>{};
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final dataInicio = (data['dataInicio'] as Timestamp).toDate();
+        final dayKey =
+            '${dataInicio.year}-${dataInicio.month}-${dataInicio.day}';
+        final duracao = data['duracaoMinutos'] as int? ?? 0;
+        tasksByDay[dayKey] = (tasksByDay[dayKey] ?? 0) + duracao;
+      }
+
+      for (int i = 0; i < 7; i++) {
+        final day = _weekStart.add(Duration(days: i));
+        final dayKey = '${day.year}-${day.month}-${day.day}';
+        final occupied = tasksByDay[dayKey] ?? 0;
+        final ratio = occupied / 960; // 960 min = 16h úteis
+
+        if (ratio >= 0.9) {
+          colors[dayKey] = const Color(0xFFE53935); // Vermelho - cheio
+        } else if (ratio >= 0.7) {
+          colors[dayKey] = const Color(0xFFFF9800); // Laranja - apertado
+        } else if (ratio > 0) {
+          colors[dayKey] = const Color(0xFF667EEA); // Roxo - normal
+        } else {
+          colors[dayKey] = Colors.grey.shade300; // Cinza - vazio
+        }
+      }
+
+      if (mounted) {
+        setState(() => _dayColors = colors);
+      }
+    } catch (e) {
+      // Silently fail
+    }
+  }
+
+  void _navigateWeek(int direction) {
+    setState(() {
+      _weekStart = _weekStart.add(Duration(days: 7 * direction));
+      final newSelected =
+          widget.selectedDate.add(Duration(days: 7 * direction));
+      widget.onChangeDate(newSelected);
+    });
+    _loadWeekOccupancy();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final base =
-        DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
-    final start = base.subtract(Duration(days: base.weekday - 1));
-    final days = List.generate(7, (i) => start.add(Duration(days: i)));
+    final days = List.generate(7, (i) => _weekStart.add(Duration(days: i)));
     const labels = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
     return Container(
@@ -597,66 +717,107 @@ class _MiniCalendarCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: List.generate(7, (index) {
-          final d = days[index];
-          final isSelected = DateUtils.isSameDay(d, selectedDate);
-          final isToday = DateUtils.isSameDay(d, DateTime.now());
-
-          return InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: () => onChangeDate(d),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    labels[index],
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 26,
-                    height: 26,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: (isSelected || isToday)
-                          ? Border.all(
-                              color: isSelected
-                                  ? const Color(0xFFFF7A5C)
-                                  : Colors.grey.shade400,
-                              width: 2,
-                            )
-                          : null,
-                    ),
-                    child: Text(
-                      '${d.day}',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: isSelected ? Colors.black : Colors.grey.shade700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: isSelected ? dayDotColor : Colors.grey.shade300,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ],
+      child: Column(
+        children: [
+          // Navigation controls
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left),
+                onPressed: () => _navigateWeek(-1),
+                iconSize: 20,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Semana anterior',
               ),
-            ),
-          );
-        }),
+              Text(
+                DateFormat('MMM yyyy', 'pt_PT').format(_weekStart),
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right),
+                onPressed: () => _navigateWeek(1),
+                iconSize: 20,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Próxima semana',
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Days row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(7, (index) {
+              final d = days[index];
+              final isSelected = DateUtils.isSameDay(d, widget.selectedDate);
+              final isToday = DateUtils.isSameDay(d, DateTime.now());
+              final dayKey = '${d.year}-${d.month}-${d.day}';
+              final dotColor = _dayColors[dayKey] ?? Colors.grey.shade300;
+
+              return InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => widget.onChangeDate(d),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        labels[index],
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: 26,
+                        height: 26,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: (isSelected || isToday)
+                              ? Border.all(
+                                  color: isSelected
+                                      ? const Color(
+                                          0xFF667EEA) // Primary purple
+                                      : Colors.grey.shade400,
+                                  width: 2,
+                                )
+                              : null,
+                        ),
+                        child: Text(
+                          '${d.day}',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: isSelected
+                                ? Colors.black
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: dotColor,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
       ),
     );
   }

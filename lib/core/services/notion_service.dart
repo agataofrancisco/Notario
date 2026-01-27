@@ -19,46 +19,62 @@ class NotionService {
   /// Cria uma tarefa no banco de dados do Notion
   /// Retorna o ID da página criada ou null em caso de falha.
   Future<String?> createTask(Task task) async {
-    if (AppConfig.notionTaskDatabaseId.isEmpty) {
+    if (AppConfig.notionTaskDatabaseId.isEmpty ||
+        AppConfig.notionTaskDatabaseId == 'notariodb') {
       if (kDebugMode) {
-        print('Notion Task Database ID is not configured.');
+        print('Notion Task Database ID is not configured properly.');
       }
       return null;
     }
 
     try {
+      final properties = <String, dynamic>{
+        'Name': {
+          'title': [
+            {
+              'text': {'content': task.titulo}
+            }
+          ]
+        },
+        'Status': {
+          'status': {'name': task.isConcluida ? 'Done' : 'Not started'}
+        },
+        'Start Date': {
+          'date': {
+            'start': task.dataInicio.toIso8601String(),
+          }
+        },
+        'Duration (mins)': {'number': task.duracaoMinutos},
+        'Priority': {
+          'select': {'name': task.prioridade.displayName}
+        }
+      };
+
+      // Adicionar descrição apenas se não for null
+      if (task.descricao != null && task.descricao!.isNotEmpty) {
+        properties['Description'] = {
+          'rich_text': [
+            {
+              'text': {'content': task.descricao}
+            }
+          ]
+        };
+      }
+
       final response = await _dio.post('/pages', data: {
         'parent': {'database_id': AppConfig.notionTaskDatabaseId},
-        'properties': {
-          'Name': {
-            'title': [
-              {
-                'text': {'content': task.titulo}
-              }
-            ]
-          },
-          'Status': {'checkbox': task.isConcluida},
-          'Description': {
-            'rich_text': [
-              {
-                'text': {'content': task.descricao}
-              }
-            ]
-          },
-          'Start Date': {
-            'date': {
-              'start': task.dataInicio.toIso8601String(),
-            }
-          },
-          'Duration (mins)': {'number': task.duracaoMinutos},
-          'Priority': {
-            'select': {'name': task.prioridade}
-          }
-        }
+        'properties': properties
       });
 
       if (response.statusCode == 200) {
         return response.data['id'];
+      }
+    } on DioException catch (e) {
+      if (kDebugMode) {
+        print('Error creating task in Notion: ${e.message}');
+        if (e.response != null) {
+          print('Notion API Error Response: ${e.response?.data}');
+        }
       }
     } catch (e) {
       if (kDebugMode) {
@@ -71,9 +87,10 @@ class NotionService {
   /// Cria uma nota no banco de dados do Notion
   /// Retorna o ID da página criada ou null em caso de falha.
   Future<String?> createNote(Note note) async {
-    if (AppConfig.notionNoteDatabaseId.isEmpty) {
+    if (AppConfig.notionNoteDatabaseId.isEmpty ||
+        AppConfig.notionNoteDatabaseId == 'notariodb') {
       if (kDebugMode) {
-        print('Notion Note Database ID is not configured.');
+        print('Notion Note Database ID is not configured properly.');
       }
       return null;
     }

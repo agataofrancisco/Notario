@@ -29,6 +29,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
   late Prioridade _priority;
   bool _isNegotiable = true;
   int _safetyMarginMinutes = 0;
+  int _avisoAntesMinutos = 10;
   bool _isLoading = false;
   bool _isValidating = false;
 
@@ -45,6 +46,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     _priority = widget.task?.prioridade ?? Prioridade.media;
     _isNegotiable = widget.task?.isNegotiable ?? true;
     _safetyMarginMinutes = widget.task?.safetyMarginMinutes ?? 0;
+    _avisoAntesMinutos = widget.task?.avisoAntesMinutos ?? 10;
   }
 
   @override
@@ -85,6 +87,8 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       final authState = context.read<AuthBloc>().state;
       if (authState is! AuthAuthenticated) return;
 
+      setState(() => _isLoading = true); // Mark as loading
+
       final finalDateTime = DateTime(
         _startDate.year,
         _startDate.month,
@@ -103,6 +107,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
           dataFim: finalDateTime.add(Duration(minutes: _durationMinutes)),
           isNegotiable: _isNegotiable,
           safetyMarginMinutes: _safetyMarginMinutes,
+          avisoAntesMinutos: _avisoAntesMinutos,
           atualizadoEm: DateTime.now(),
         );
         context.read<TaskBloc>().add(TaskUpdateRequested(updatedTask));
@@ -118,6 +123,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
           prioridade: _priority,
           isNegotiable: _isNegotiable,
           safetyMarginMinutes: _safetyMarginMinutes,
+          avisoAntesMinutos: _avisoAntesMinutos,
           criadoEm: DateTime.now(),
           atualizadoEm: DateTime.now(),
         );
@@ -215,31 +221,121 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
         ),
       );
     } else {
-      // Dia não viável - mostrar opções de reagendamento
+      // Dia não viável - verificar se pode reagendar ou não
+      final podeReagendar = result.podeReagendar ?? false;
       final authState = context.read<AuthBloc>().state;
       if (authState is! AuthAuthenticated) return;
 
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => SmartReschedulingDialog(
-          validationResult: {
-            'viavel': result.viavel,
-            'podeReagendar': result.podeReagendar,
-            'tempoLivreMinutos': result.tempoLivreMinutos,
-            'mensagem': result.mensagem,
-            'tarefasParaMover': result.tarefasParaMover,
-            'reagendamentoSugerido': result.reagendamentoSugerido,
-            'diasAlternativos': result.diasAlternativos,
-            'tempoLiberado': result.tempoLiberado,
-          },
-          userId: authState.user.uid,
-          onReschedulingComplete: () {
-            // Após reagendamento bem-sucedido, salvar a nova tarefa
-            _performSave();
-          },
-        ),
-      );
+      if (podeReagendar) {
+        // Mostrar diálogo de reagendamento inteligente
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => SmartReschedulingDialog(
+            validationResult: {
+              'viavel': result.viavel,
+              'podeReagendar': result.podeReagendar,
+              'tempoLivreMinutos': result.tempoLivreMinutos,
+              'mensagem': result.mensagem,
+              'tarefasParaMover': result.tarefasParaMover,
+              'reagendamentoSugerido': result.reagendamentoSugerido,
+              'diasAlternativos': result.diasAlternativos,
+              'tempoLiberado': result.tempoLiberado,
+            },
+            userId: authState.user.uid,
+            onReschedulingComplete: () {
+              // Após reagendamento bem-sucedido, salvar a nova tarefa
+              _performSave();
+            },
+          ),
+        );
+      } else {
+        // Não pode reagendar - dia completamente lotado
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.block, color: Colors.red),
+                const SizedBox(width: 8),
+                const Text('Dia Lotado'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red.withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    result.mensagem,
+                    style: TextStyle(
+                      color: Colors.red.shade800,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '❌ Não é possível agendar neste dia',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red.shade700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Todas as tarefas existentes têm prioridade igual ou superior à nova tarefa.',
+                  style: TextStyle(color: Colors.grey.shade700),
+                ),
+                if (result.diasAlternativos != null &&
+                    result.diasAlternativos!.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const Text(
+                    '✅ Dias alternativos disponíveis:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: result.diasAlternativos!.map((dia) {
+                      return Chip(
+                        label: Text(
+                          DateFormat('dd/MM (EEE)', 'pt_PT').format(dia),
+                        ),
+                        backgroundColor: Colors.green.shade100,
+                        avatar: Icon(Icons.calendar_today,
+                            size: 16, color: Colors.green.shade700),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Sugestão: Escolha um destes dias para agendar sua tarefa.',
+                    style: TextStyle(
+                      color: Colors.green.shade700,
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Entendi'),
+              ),
+            ],
+          ),
+        );
+      }
     }
   }
 
@@ -269,11 +365,21 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       body: BlocListener<TaskBloc, TaskState>(
         listener: (context, state) {
           if (state is TaskOperationSuccess) {
-            Navigator.of(context).pop(); // Fechar a tela
-            // Pequeno delay para garantir que a navegação ocorreu antes do snackbar (opcional)
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message)),
-            );
+            setState(() => _isLoading = false);
+            // Voltar para o dashboard/tela anterior
+            Navigator.of(context).pop();
+            // Mostrar mensagem de sucesso
+            Future.delayed(const Duration(milliseconds: 100), () {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(state.message),
+                    backgroundColor: Colors.green,
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
+            });
           }
           if (state is TaskError) {
             setState(() {
@@ -444,6 +550,39 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                   onChanged: (value) {
                     if (value != null) {
                       setState(() => _priority = value);
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<int>(
+                  value: widget.task?.avisoAntesMinutos ?? 10,
+                  decoration: const InputDecoration(
+                    labelText: 'Lembrete *',
+                    prefixIcon: Icon(Icons.notifications),
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 0, child: Text('Sem lembrete')),
+                    DropdownMenuItem(value: 5, child: Text('5 minutos antes')),
+                    DropdownMenuItem(
+                        value: 10, child: Text('10 minutos antes')),
+                    DropdownMenuItem(
+                        value: 15, child: Text('15 minutos antes')),
+                    DropdownMenuItem(
+                        value: 30, child: Text('30 minutos antes')),
+                    DropdownMenuItem(value: 60, child: Text('1 hora antes')),
+                    DropdownMenuItem(value: 1440, child: Text('1 dia antes')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _avisoAntesMinutos = value;
+                      });
+                    }
+                  },
+                  onSaved: (value) {
+                    if (value != null) {
+                      _avisoAntesMinutos = value;
                     }
                   },
                 ),

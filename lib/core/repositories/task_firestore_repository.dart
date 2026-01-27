@@ -146,10 +146,11 @@ class TaskFirestoreRepository {
 
   /// Concluir tarefa
   Future<void> completeTask(String taskId, int tempoRealMinutos) async {
+    final now = DateTime.now();
     await _tasksCollection.doc(taskId).update({
       'estado': EstadoTarefa.concluida.name,
       'tempoRealMinutos': tempoRealMinutos,
-      'concluidoEm': FieldValue.serverTimestamp(),
+      'concluidoEm': Timestamp.fromDate(now),
       'atualizadoEm': FieldValue.serverTimestamp(),
     });
   }
@@ -228,8 +229,9 @@ class TaskFirestoreRepository {
 
       // 4.1. Identificar tarefas de menor prioridade que podem ser movidas
       final tarefasNegociaveis = tasks
-          .where((t) => t.isNegotiable && 
-                       _getPrioridadeValue(t.prioridade) < prioridadeAtualValue)
+          .where((t) =>
+              t.isNegotiable &&
+              _getPrioridadeValue(t.prioridade) < prioridadeAtualValue)
           .toList()
         ..sort((a, b) {
           // Ordenar por prioridade (menor primeiro) e depois por duração (maior primeiro)
@@ -261,7 +263,8 @@ class TaskFirestoreRepository {
           'mensagem': reagendamento['mensagem'],
           'tarefasParaMover': reagendamento['tarefasParaMover'],
           'reagendamentoSugerido': reagendamento['reagendamentoSugerido'],
-          'diasAlternativos': diasAlternativos,
+          'diasAlternativos':
+              diasAlternativos.map((d) => d.toIso8601String()).toList(),
           'tempoLiberado': reagendamento['tempoLiberado'],
         };
       }
@@ -273,10 +276,11 @@ class TaskFirestoreRepository {
         'tempoLivreMinutos': tempoLivre,
         'tempoOcupadoMinutos': tempoOcupado,
         'percentualOcupado': percentual,
-        'mensagem': tarefasNegociaveis.isEmpty 
+        'mensagem': tarefasNegociaveis.isEmpty
             ? 'Dia lotado. Todas as tarefas têm prioridade igual ou superior.'
             : 'Não há espaço suficiente mesmo movendo tarefas de menor prioridade.',
-        'diasAlternativos': diasAlternativos,
+        'diasAlternativos':
+            diasAlternativos.map((d) => d.toIso8601String()).toList(),
         'tarefasNegociaveis': tarefasNegociaveis.length,
       };
     } catch (e) {
@@ -334,7 +338,8 @@ class TaskFirestoreRepository {
     if (tempoLiberado >= tempoNecessario) {
       return {
         'viavel': true,
-        'mensagem': 'Pode agendar movendo ${tarefasParaMover.length} tarefa(s) de menor prioridade.',
+        'mensagem':
+            'Pode agendar movendo ${tarefasParaMover.length} tarefa(s) de menor prioridade.',
         'tarefasParaMover': tarefasParaMover,
         'reagendamentoSugerido': reagendamentoSugerido,
         'tempoLiberado': tempoLiberado,
@@ -343,7 +348,8 @@ class TaskFirestoreRepository {
 
     return {
       'viavel': false,
-      'mensagem': 'Mesmo movendo tarefas de menor prioridade, não há espaço suficiente.',
+      'mensagem':
+          'Mesmo movendo tarefas de menor prioridade, não há espaço suficiente.',
       'tarefasParaMover': tarefasParaMover,
       'tempoLiberado': tempoLiberado,
     };
@@ -358,7 +364,7 @@ class TaskFirestoreRepository {
     // Procurar nos próximos 14 dias (excluindo o dia original)
     for (int i = 1; i <= 14; i++) {
       final candidato = dataOriginal.add(Duration(days: i));
-      
+
       // Pular fins de semana se a tarefa original era em dia útil
       if (_isDiaUtil(dataOriginal) && !_isDiaUtil(candidato)) continue;
 
@@ -456,13 +462,13 @@ class TaskFirestoreRepository {
       for (var sugestao in reagendamentoSugerido) {
         final tarefaId = sugestao['tarefaId'] as String;
         final dataSugerida = DateTime.parse(sugestao['dataSugerida'] as String);
-        
+
         // Buscar tarefa atual
         final tarefaDoc = await _tasksCollection.doc(tarefaId).get();
         if (!tarefaDoc.exists) continue;
 
         final tarefa = Task.fromJson(tarefaDoc.data() as Map<String, dynamic>);
-        
+
         // Calcular nova data/hora mantendo o mesmo horário
         final novaDataInicio = DateTime(
           dataSugerida.year,
@@ -471,7 +477,7 @@ class TaskFirestoreRepository {
           tarefa.dataInicio.hour,
           tarefa.dataInicio.minute,
         );
-        
+
         final novaDataFim = novaDataInicio.add(
           Duration(minutes: tarefa.duracaoMinutos),
         );
@@ -497,7 +503,8 @@ class TaskFirestoreRepository {
       return {
         'sucesso': true,
         'tarefasMovidas': tarefasMovidas,
-        'mensagem': 'Reagendamento executado com sucesso! ${tarefasMovidas.length} tarefa(s) movida(s).',
+        'mensagem':
+            'Reagendamento executado com sucesso! ${tarefasMovidas.length} tarefa(s) movida(s).',
       };
     } catch (e) {
       return {
@@ -508,13 +515,15 @@ class TaskFirestoreRepository {
   }
 
   /// Obter estatísticas semanais para notificações
-  Future<Map<String, dynamic>> getWeeklyStats(String userId, DateTime weekStart) async {
+  Future<Map<String, dynamic>> getWeeklyStats(
+      String userId, DateTime weekStart) async {
     try {
       final weekEnd = weekStart.add(const Duration(days: 7));
-      
+
       final snapshot = await _tasksCollection
           .where('userId', isEqualTo: userId)
-          .where('dataInicio', isGreaterThanOrEqualTo: Timestamp.fromDate(weekStart))
+          .where('dataInicio',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(weekStart))
           .where('dataInicio', isLessThan: Timestamp.fromDate(weekEnd))
           .get();
 
@@ -526,13 +535,14 @@ class TaskFirestoreRepository {
       final tarefasConcluidas = tasks.where((t) => t.isConcluida).length;
       final tarefasPendentes = tasks.where((t) => t.isPendente).length;
       final tarefasPuladas = tasks.where((t) => t.isPulada).length;
-      
-      final percentualConclusao = tarefasDefinidas > 0 
+
+      final percentualConclusao = tarefasDefinidas > 0
           ? (tarefasConcluidas / tarefasDefinidas * 100).round()
           : 0;
 
       // Tempo total planejado vs realizado
-      final tempoPlaneado = tasks.fold<int>(0, (sum, t) => sum + t.duracaoMinutos);
+      final tempoPlaneado =
+          tasks.fold<int>(0, (sum, t) => sum + t.duracaoMinutos);
       final tempoRealizado = tasks
           .where((t) => t.isConcluida && t.tempoRealMinutos != null)
           .fold<int>(0, (sum, t) => sum + (t.tempoRealMinutos ?? 0));
@@ -547,7 +557,7 @@ class TaskFirestoreRepository {
         'percentualConclusao': percentualConclusao,
         'tempoPlaneadoMinutos': tempoPlaneado,
         'tempoRealizadoMinutos': tempoRealizado,
-        'eficienciaTempo': tempoPlaneado > 0 
+        'eficienciaTempo': tempoPlaneado > 0
             ? (tempoRealizado / tempoPlaneado * 100).round()
             : 0,
       };

@@ -1,84 +1,58 @@
-# Configuração do Notion - Guia Rápido
+# Notion Integration Setup
 
-## Passos para Configurar a Integração
+A integração com Notion está **desabilitada** até que seja configurada corretamente.
 
-### 1. Criar Integração no Notion
+## Problemas Identificados
 
-1. Acesse: https://www.notion.so/my-integrations
-2. Clique em **"+ New integration"**
-3. Preencha:
-   - **Name**: Notário App
-   - **Associated workspace**: Escolha seu workspace
-   - **Type**: Internal
-4. Clique em **Submit**
-5. **COPIE O TOKEN** que aparece (começa com `ntn_...`) - você já forneceu este token ✓
+1. **Database ID inválido**: O valor `'notariodb'` não é um ID válido do Notion
+2. **Token de API**: Precisa ser verificado se ainda é válido
 
-### 2. Criar Bancos de Dados no Notion
+## Como Configurar
 
-#### Banco de Dados: Tarefas Notário
+### 1. Obter o Database ID
 
-1. No Notion, crie uma nova página
-2. Digite `/database` e escolha **"Table - Full page"**
-3. Nomeie como **"Tarefas Notário"**
-4. Adicione as seguintes propriedades (colunas):
-   - **Name** (Title) - já existe por padrão
-   - **Status** (Checkbox)
-   - **Description** (Text)
-   - **Start Date** (Date)
-   - **Duration (mins)** (Number)
-   - **Priority** (Select) - adicione opções: `baixa`, `media`, `alta`
+1. Abra o seu database no Notion
+2. Clique em "Share" → "Copy link"
+3. O link terá este formato: `https://www.notion.so/workspace/DATABASE_ID?v=...`
+4. Copie o `DATABASE_ID` (32 caracteres hexadecimais)
 
-#### Banco de Dados: Notas Notário
+### 2. Atualizar a Configuração
 
-1. Crie outra página com `/database`
-2. Nomeie como **"Notas Notário"**
-3. Adicione as propriedades:
-   - **Name** (Title) - já existe
-   - **Content** (Text)
-   - **Date** (Date)
-
-### 3. Compartilhar Bancos de Dados com a Integração
-
-Para CADA banco de dados criado:
-
-1. Clique nos **"..."** (três pontos) no canto superior direito
-2. Vá em **"Connections"** ou **"Add connections"**
-3. Procure e selecione **"Notário App"** (a integração que você criou)
-
-### 4. Obter os Database IDs
-
-Para cada banco de dados:
-
-1. Abra o banco de dados em página completa
-2. Olhe para a URL no navegador, ela será algo como:
-   ```
-   https://www.notion.so/SEU_WORKSPACE/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX?v=...
-   ```
-3. O **Database ID** é a parte `XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX` (32 caracteres)
-
-### 5. Configurar no App
-
-Abra o arquivo `lib/core/config/app_config.dart` e preencha:
+Edite o arquivo `lib/core/config/app_config.dart`:
 
 ```dart
-// TODO: Usuário deve preencher estes IDs
-static const String notionTaskDatabaseId = 'COLE_AQUI_O_ID_DO_BANCO_DE_TAREFAS';
-static const String notionNoteDatabaseId = 'COLE_AQUI_O_ID_DO_BANCO_DE_NOTAS';
+// Substituir 'notariodb' pelos IDs reais
+static const String notionTaskDatabaseId = 'SEU_DATABASE_ID_AQUI';
+static const String notionNoteDatabaseId = 'SEU_DATABASE_ID_AQUI';
 ```
 
-## Verificação
+### 3. Verificar o Token
 
-Após configurar:
+O token atual começa com `ntn_562462600888...`. Verifique se:
 
-1. Compile e execute o app
-2. Crie uma tarefa ou nota
-3. Verifique se aparece no Notion
-4. No Notion Calendar, conecte o banco de dados "Tarefas Notário" para visualizar no calendário
+- Ainda está válido
+- Tem permissões para criar páginas nos databases
+- Foi criado na integração correta
 
-## Troubleshooting
+### 4. Estrutura do Database
 
-**Erro de autenticação**: Verifique se o token está correto e se a integração tem acesso aos bancos de dados.
+O database do Notion deve ter as seguintes propriedades:
 
-**Propriedades não aparecem**: Certifique-se de que os nomes das propriedades correspondem EXATAMENTE aos nomes no código (case-sensitive).
+**Para Tasks:**
 
-**Nada aparece no Notion**: Verifique os logs do app (modo debug) para ver mensagens de erro da API do Notion.
+- `Name` (Title)
+- `Status` (Checkbox)
+- `Description` (Rich Text) - opcional
+- `Start Date` (Date)
+- `Duration (mins)` (Number)
+- `Priority` (Select) - com opções: "Baixa", "Média", "Alta"
+
+**Para Notes:**
+
+- `Name` (Title)
+- `Content` (Rich Text)
+- `Date` (Date)
+
+## Status Atual
+
+A integração está **silenciosamente desabilitada**. Quando o Database ID for inválido, o serviço simplesmente retorna `null` sem causar erros na aplicação.

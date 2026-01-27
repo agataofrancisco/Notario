@@ -142,18 +142,23 @@ class TaskListItem extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildInfoChip(
-                      context,
-                      icon: Icons.calendar_today_outlined,
-                      label: DateFormat("dd/MM/yy 'às' HH:mm", 'pt_PT')
-                          .format(task.dataInicio),
-                      isDisabled: isDisabled,
+                    Flexible(
+                      child: _buildInfoChip(
+                        context,
+                        icon: Icons.calendar_today_outlined,
+                        label: DateFormat("dd/MM/yy 'às' HH:mm", 'pt_PT')
+                            .format(task.dataInicio),
+                        isDisabled: isDisabled,
+                      ),
                     ),
-                    _buildInfoChip(
-                      context,
-                      icon: Icons.timer_outlined,
-                      label: '${task.duracaoMinutos} min',
-                      isDisabled: isDisabled,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: _buildInfoChip(
+                        context,
+                        icon: Icons.timer_outlined,
+                        label: '${task.duracaoMinutos} min',
+                        isDisabled: isDisabled,
+                      ),
                     ),
                   ],
                 ),
@@ -176,18 +181,22 @@ class TaskListItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon,
               size: 14,
               color: isDisabled ? Colors.grey.shade400 : Colors.grey.shade800),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color:
-                    isDisabled ? Colors.grey.shade500 : Colors.grey.shade900),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color:
+                      isDisabled ? Colors.grey.shade500 : Colors.grey.shade900),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -201,7 +210,7 @@ class TaskListItem extends StatelessWidget {
       case Prioridade.media:
         return Colors.orange.shade400;
       case Prioridade.baixa:
-        return Colors.blue.shade400;
+        return Colors.blue.shade400; // Blue to match theme
       default:
         return Colors.grey;
     }
