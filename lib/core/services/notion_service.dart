@@ -36,10 +36,7 @@ class NotionService {
             }
           ]
         },
-        'Status': {
-          'status': {'name': task.isConcluida ? 'Done' : 'Not started'}
-        },
-        'Start Date': {
+        'Date': {
           'date': {
             'start': task.dataInicio.toIso8601String(),
           }
@@ -48,6 +45,15 @@ class NotionService {
         'Priority': {
           'select': {'name': task.prioridade.displayName}
         }
+      };
+
+      // Tentar definir Status. Como não sabemos se o database usa 'status' ou 'checkbox',
+      // vamos assumir 'status' por padrão e o usuário configurará se falhar,
+      // ou podemos tentar ser espertos. Mas na criação, se o JSON estiver errado, a API rejeita.
+      // O mais seguro para criação é o usuário ter o database correto.
+      // Porém, vamos tentar manter consistência com o updateTaskStatus.
+      properties['Status'] = {
+        'status': {'name': task.isConcluida ? 'Done' : 'Not started'}
       };
 
       // Adicionar descrição apenas se não for null
@@ -130,5 +136,40 @@ class NotionService {
       }
     }
     return null;
+  }
+
+  /// Atualiza o status de uma tarefa no Notion
+  Future<bool> updateTaskStatus(String pageId, bool completed) async {
+    try {
+      // Tentar atualizar como 'status' primeiro (padrão novo do Notion)
+      try {
+        final response = await _dio.patch('/pages/$pageId', data: {
+          'properties': {
+            'Status': {
+              'status': {'name': completed ? 'Done' : 'Not started'}
+            },
+          }
+        });
+        if (response.statusCode == 200) return true;
+      } catch (e) {
+        if (kDebugMode) {
+          print('Failed to update as status property, trying as checkbox...');
+        }
+      }
+
+      // Se falhar, tentar como 'checkbox' (padrão que alguns usuários usam)
+      final response = await _dio.patch('/pages/$pageId', data: {
+        'properties': {
+          'Status': {'checkbox': completed},
+        }
+      });
+
+      return response.statusCode == 200;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error updating task status in Notion: $e');
+      }
+      return false;
+    }
   }
 }

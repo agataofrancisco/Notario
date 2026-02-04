@@ -134,9 +134,14 @@ class NoteBloc extends Bloc<NoteEvent, NoteState> {
 
       // Sincronizar com Notion (não bloqueia)
       try {
-        await _notionService.createNote(event.note);
+        final notionId = await _notionService.createNote(event.note);
+        if (notionId != null) {
+          await _repository.update(event.note.copyWith(notionSynced: true));
+        } else {
+          await _repository.update(event.note.copyWith(notionSynced: false));
+        }
       } catch (_) {
-        // Falha silenciosa
+        await _repository.update(event.note.copyWith(notionSynced: false));
       }
 
       // Agendar notificação se houver lembrete

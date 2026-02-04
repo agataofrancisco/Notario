@@ -10,9 +10,9 @@ import '../../../tasks/domain/entities/task.dart';
 import '../../../tasks/presentation/bloc/task_bloc.dart';
 import '../../../tasks/presentation/screens/task_form_screen.dart';
 import '../../../tasks/presentation/widgets/task_list_item.dart';
-import '../../../../core/repositories/task_firestore_repository.dart';
 import '../bloc/stats_bloc.dart';
-import '../widgets/weekly_summary_card.dart';
+import '../../../notes/presentation/screens/note_list_screen.dart';
+import '../../../notes/presentation/screens/note_form_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -22,6 +22,7 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  int _currentIndex = 0;
   DateTime _selectedDate = DateTime.now();
 
   @override
@@ -59,92 +60,143 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: BlocListener<TaskBloc, TaskState>(
-        listener: (context, state) {
-          if (state is TaskOperationSuccess) {
-            _loadTasksForSelectedDate();
-          }
-        },
-        child: RefreshIndicator(
-          onRefresh: () async => _loadTasksForSelectedDate(),
-          child: BlocBuilder<TaskBloc, TaskState>(
-            builder: (context, state) {
-              final allTasks =
-                  state is TaskDayLoaded ? state.tasks : const <Task>[];
-              final pendingTasks = allTasks
-                  .where((t) =>
-                      t.estado == EstadoTarefa.pendente ||
-                      t.estado == EstadoTarefa.emExecucao)
-                  .toList();
-              final stats = _DashboardStats.fromTasks(allTasks);
-              final authState = context.read<AuthBloc>().state;
-              final userId =
-                  authState is AuthAuthenticated ? authState.user.uid : null;
-
-              return CustomScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: _DashboardHero(
-                      selectedDate: _selectedDate,
-                      stats: stats,
-                      userId: userId,
-                      onLogoutPressed: () {
-                        context.read<AuthBloc>().add(AuthLogoutRequested());
-                      },
-                      onChangeDate: (date) {
-                        setState(() => _selectedDate = date);
-                        _loadTasksForSelectedDate();
-                      },
-                    ),
-                  ),
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    sliver: SliverToBoxAdapter(
-                      child: Text(
-                        'Próximas Actividades',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                    ),
-                  ),
-                  if (state is TaskLoading)
-                    const SliverFillRemaining(
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (state is TaskError)
-                    SliverFillRemaining(
-                      child: Center(child: Text('Erro: ${state.message}')),
-                    )
-                  else if (pendingTasks.isEmpty)
-                    SliverFillRemaining(child: _EmptyState())
-                  else
-                    SliverPadding(
-                      padding: const EdgeInsets.only(bottom: 120),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) =>
-                              TaskListItem(task: pendingTasks[index]),
-                          childCount: pendingTasks.length,
-                        ),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
+      appBar: _currentIndex == 1
+          ? AppBar(
+              title: const Text('Minhas Notas'),
+              elevation: 0,
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
+            )
+          : null,
+      body: _buildBody(),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const TaskFormScreen(task: null)),
-          );
+          if (_currentIndex == 0) {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                  builder: (_) => const TaskFormScreen(task: null)),
+            );
+          } else {
+            Navigator.of(context)
+                .push(
+              MaterialPageRoute(
+                  builder: (_) => const NoteFormScreen(note: null)),
+            )
+                .then((_) {
+              // Recarregar notas se necessário, mas o NoteListView já tem listener
+            });
+          }
         },
         elevation: 6,
         backgroundColor: const Color(0xFF667EEA), // Primary purple
-        child: const Icon(Icons.add, size: 32, color: Colors.white),
+        child: Icon(_currentIndex == 0 ? Icons.add_task : Icons.note_add,
+            size: 28, color: Colors.white),
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+        selectedItemColor: const Color(0xFF667EEA),
+        unselectedItemColor: Colors.grey,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.calendar_today),
+            label: 'Tarefas',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.sticky_note_2_outlined),
+            activeIcon: Icon(Icons.sticky_note_2),
+            label: 'Notas',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_currentIndex == 1) {
+      return const NoteListView();
+    }
+
+    return BlocListener<TaskBloc, TaskState>(
+      listener: (context, state) {
+        if (state is TaskOperationSuccess) {
+          _loadTasksForSelectedDate();
+        }
+      },
+      child: RefreshIndicator(
+        onRefresh: () async => _loadTasksForSelectedDate(),
+        child: BlocBuilder<TaskBloc, TaskState>(
+          builder: (context, state) {
+            final allTasks =
+                state is TaskDayLoaded ? state.tasks : const <Task>[];
+            final pendingTasks = allTasks
+                .where((t) =>
+                    t.estado == EstadoTarefa.pendente ||
+                    t.estado == EstadoTarefa.emExecucao)
+                .toList();
+            final stats = _DashboardStats.fromTasks(allTasks);
+            final authState = context.read<AuthBloc>().state;
+            final userId =
+                authState is AuthAuthenticated ? authState.user.uid : null;
+
+            return CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: _DashboardHero(
+                    selectedDate: _selectedDate,
+                    stats: stats,
+                    userId: userId,
+                    onLogoutPressed: () {
+                      context.read<AuthBloc>().add(AuthLogoutRequested());
+                    },
+                    onChangeDate: (date) {
+                      setState(() => _selectedDate = date);
+                      _loadTasksForSelectedDate();
+                    },
+                  ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  sliver: SliverToBoxAdapter(
+                    child: Text(
+                      'Próximas Actividades',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ),
+                ),
+                if (state is TaskLoading)
+                  const SliverFillRemaining(
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (state is TaskError)
+                  SliverFillRemaining(
+                    child: Center(child: Text('Erro: ${state.message}')),
+                  )
+                else if (pendingTasks.isEmpty)
+                  SliverFillRemaining(child: _EmptyState())
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.only(bottom: 120),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => TaskListItem(
+                          task: pendingTasks[index],
+                          onDelete: () {
+                            context.read<TaskBloc>().add(
+                                TaskDeleteRequested(pendingTasks[index].id));
+                          },
+                        ),
+                        childCount: pendingTasks.length,
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

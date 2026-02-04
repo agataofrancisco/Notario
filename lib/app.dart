@@ -8,7 +8,9 @@ import 'core/services/notion_service.dart';
 import 'core/services/statistics_service.dart';
 import 'core/services/weekly_notification_service.dart';
 import 'core/repositories/task_firestore_repository.dart';
+
 import 'core/config/app_config.dart';
+import 'core/services/sync_service.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/auth/presentation/bloc/auth_event.dart';
 import 'features/auth/presentation/bloc/auth_state.dart';
@@ -101,6 +103,14 @@ class NotarioApp extends StatelessWidget {
           create: (context) =>
               StatisticsService(context.read<TaskRepository>()),
         ),
+        RepositoryProvider<SyncService>(
+          create: (context) => SyncService(
+            taskRepository: context.read<TaskFirestoreRepository>(),
+            noteRepository: context.read<NoteRepository>(),
+            notionService: context.read<NotionService>(),
+            calendarService: context.read<GoogleCalendarService>(),
+          ),
+        ),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -161,6 +171,9 @@ class NotarioApp extends StatelessWidget {
                   await weeklyService.initialize(state.user.uid);
                   await weeklyService
                       .checkAndSendMissedNotifications(state.user.uid);
+
+                  // Iniciar sincronização em segundo plano
+                  context.read<SyncService>().startPeriodicSync();
                 });
 
                 return const DashboardScreen();

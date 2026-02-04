@@ -326,14 +326,14 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
           if (createdEvent != null && createdEvent.id != null) {
             taskToSave = taskToSave.copyWith(
               googleEventId: createdEvent.id,
-              sincronizado: true,
+              googleCalendarSynced: true,
             );
           } else {
-            // Falha silenciosa - evento não criado no Google Calendar
-            taskToSave = taskToSave.copyWith(sincronizado: false);
+            // Falha silenciosa
+            taskToSave = taskToSave.copyWith(googleCalendarSynced: false);
           }
         } catch (_) {
-          taskToSave = taskToSave.copyWith(sincronizado: false);
+          taskToSave = taskToSave.copyWith(googleCalendarSynced: false);
         }
       }
 
@@ -342,9 +342,17 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
 
       // 2.5) Sincronizar com Notion (não bloqueia)
       try {
-        await _notionService.createTask(taskToSave);
+        final notionId = await _notionService.createTask(taskToSave);
+        if (notionId != null) {
+          taskToSave = taskToSave.copyWith(
+            notionPageId: notionId,
+            notionSynced: true,
+          );
+        } else {
+          taskToSave = taskToSave.copyWith(notionSynced: false);
+        }
       } catch (_) {
-        // Falha silenciosa - não impede criação da tarefa
+        taskToSave = taskToSave.copyWith(notionSynced: false);
       }
 
       // 3) Lembrete local
@@ -354,6 +362,10 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
         startTime: taskToSave.dataInicio,
         minutesBefore: taskToSave.avisoAntesMinutos,
       );
+
+      // 4) Garantir que os flags finais estão no Firestore
+      await _repository.update(taskToSave);
+
       emit(const TaskOperationSuccess('Tarefa criada com sucesso!'));
     } catch (e) {
       emit(TaskError('Erro ao criar tarefa: ${e.toString()}'));
@@ -380,9 +392,9 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
               durationMinutes: taskToSave.duracaoMinutos,
             );
             if (updatedEvent != null) {
-              taskToSave = taskToSave.copyWith(sincronizado: true);
+              taskToSave = taskToSave.copyWith(googleCalendarSynced: true);
             } else {
-              taskToSave = taskToSave.copyWith(sincronizado: false);
+              taskToSave = taskToSave.copyWith(googleCalendarSynced: false);
             }
           } else {
             final createdEvent =
@@ -395,14 +407,14 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
             if (createdEvent != null && createdEvent.id != null) {
               taskToSave = taskToSave.copyWith(
                 googleEventId: createdEvent.id,
-                sincronizado: true,
+                googleCalendarSynced: true,
               );
             } else {
-              taskToSave = taskToSave.copyWith(sincronizado: false);
+              taskToSave = taskToSave.copyWith(googleCalendarSynced: false);
             }
           }
         } catch (_) {
-          taskToSave = taskToSave.copyWith(sincronizado: false);
+          taskToSave = taskToSave.copyWith(googleCalendarSynced: false);
         }
       }
 

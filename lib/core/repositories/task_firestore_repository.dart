@@ -1,10 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../features/tasks/domain/entities/task.dart';
+import '../services/notion_service.dart';
 
 /// Repositório de tarefas usando Firestore
 /// Substitui o antigo TaskRepository que usava SQLite
 class TaskFirestoreRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final NotionService _notionService;
+
+  TaskFirestoreRepository({NotionService? notionService})
+      : _notionService = notionService ?? NotionService();
 
   // Referência à coleção de tarefas
   CollectionReference get _tasksCollection => _firestore.collection('tasks');
@@ -153,6 +158,18 @@ class TaskFirestoreRepository {
       'concluidoEm': Timestamp.fromDate(now),
       'atualizadoEm': FieldValue.serverTimestamp(),
     });
+
+    // Sincronizar com Notion se houver notionPageId
+    final task = await getById(taskId);
+    if (task != null && task.notionPageId != null) {
+      final success =
+          await _notionService.updateTaskStatus(task.notionPageId!, true);
+      if (success) {
+        await _tasksCollection.doc(taskId).update({'notionSynced': true});
+      } else {
+        await _tasksCollection.doc(taskId).update({'notionSynced': false});
+      }
+    }
   }
 
   /// Pular tarefa
@@ -167,6 +184,21 @@ class TaskFirestoreRepository {
   Future<void> cancelTask(String taskId) async {
     await _tasksCollection.doc(taskId).update({
       'estado': EstadoTarefa.cancelada.name,
+      'atualizadoEm': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Reagendar tarefa
+  Future<void> rescheduleTask(String taskId, DateTime newStart) async {
+    final task = await getById(taskId);
+    if (task == null) return;
+
+    final newEnd = newStart.add(Duration(minutes: task.duracaoMinutos));
+
+    await _tasksCollection.doc(taskId).update({
+      'dataInicio': Timestamp.fromDate(newStart),
+      'dataFim': Timestamp.fromDate(newEnd),
+      'estado': EstadoTarefa.pendente.name,
       'atualizadoEm': FieldValue.serverTimestamp(),
     });
   }

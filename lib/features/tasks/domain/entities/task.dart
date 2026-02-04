@@ -68,6 +68,7 @@ class Task {
   final String id;
   final String userId;
   final String? googleEventId;
+  final String? notionPageId;
   final String titulo;
   final String? descricao;
   final DateTime dataInicio;
@@ -80,17 +81,20 @@ class Task {
   final int? tempoRealMinutos;
   final bool isNegotiable;
   final int safetyMarginMinutes;
-  final bool sincronizado;
+  final bool sincronizado; // Mantido para retrocompatibilidade
   final int versao;
   final DateTime criadoEm;
   final DateTime atualizadoEm;
   final DateTime? concluidoEm;
   final SyncStatus syncStatus;
+  final bool notionSynced;
+  final bool googleCalendarSynced;
 
   Task({
     required this.id,
     required this.userId,
     this.googleEventId,
+    this.notionPageId,
     required this.titulo,
     this.descricao,
     required this.dataInicio,
@@ -109,27 +113,32 @@ class Task {
     required this.atualizadoEm,
     this.concluidoEm,
     this.syncStatus = SyncStatus.synced,
+    this.notionSynced = false,
+    this.googleCalendarSynced = false,
   });
 
   factory Task.fromJson(Map<String, dynamic> json) {
-    // Suporta tanto Firestore Timestamp quanto String ISO
     DateTime parseDateTime(dynamic value) {
       if (value == null) return DateTime.now();
       if (value is String) return DateTime.parse(value);
-      // Firestore Timestamp
-      return (value as dynamic).toDate();
+      try {
+        return (value as dynamic).toDate();
+      } catch (e) {
+        return DateTime.now();
+      }
     }
 
     return Task(
       id: json['id'],
-      userId: json['userId'] ?? json['user_id'], // Firestore usa camelCase
+      userId: json['userId'] ?? json['user_id'] ?? '',
       googleEventId: json['googleEventId'] ?? json['google_event_id'],
-      titulo: json['titulo'],
+      notionPageId: json['notionPageId'] ?? json['notion_page_id'],
+      titulo: json['titulo'] ?? '',
       descricao: json['descricao'],
       dataInicio: parseDateTime(json['dataInicio'] ?? json['data_inicio']),
       dataFim: parseDateTime(json['dataFim'] ?? json['data_fim']),
-      duracaoMinutos: json['duracaoMinutos'] ?? json['duracao_minutos'],
-      prioridade: Prioridade.fromJson(json['prioridade']),
+      duracaoMinutos: json['duracaoMinutos'] ?? json['duracao_minutos'] ?? 0,
+      prioridade: Prioridade.fromJson(json['prioridade'] ?? 'media'),
       avisoAntesMinutos:
           json['avisoAntesMinutos'] ?? json['aviso_antes_minutos'] ?? 10,
       avisoDepoisMinutos:
@@ -147,16 +156,22 @@ class Task {
       concluidoEm: json['concluidoEm'] != null || json['concluido_em'] != null
           ? parseDateTime(json['concluidoEm'] ?? json['concluido_em'])
           : null,
-      syncStatus: SyncStatus.synced,
+      syncStatus: SyncStatus.fromJson(
+          json['syncStatus'] ?? json['sync_status'] ?? 'synced'),
+      notionSynced: json['notionSynced'] ?? json['notion_synced'] ?? false,
+      googleCalendarSynced: json['googleCalendarSynced'] ??
+          json['google_calendar_synced'] ??
+          json['sincronizado'] ??
+          false,
     );
   }
 
   Map<String, dynamic> toJson() {
-    // Firestore usa camelCase
     return {
       'id': id,
       'userId': userId,
       'googleEventId': googleEventId,
+      'notionPageId': notionPageId,
       'titulo': titulo,
       'descricao': descricao,
       'dataInicio': dataInicio,
@@ -169,12 +184,74 @@ class Task {
       'tempoRealMinutos': tempoRealMinutos,
       'isNegotiable': isNegotiable,
       'safetyMarginMinutes': safetyMarginMinutes,
-      'sincronizado': sincronizado,
+      'sincronizado': googleCalendarSynced, // Retrocompatibilidade
       'versao': versao,
       'criadoEm': criadoEm,
       'atualizadoEm': atualizadoEm,
       'concluidoEm': concluidoEm,
+      'notionSynced': notionSynced,
+      'googleCalendarSynced': googleCalendarSynced,
     };
+  }
+
+  static DateTime _parseDateTime(dynamic value) {
+    if (value == null) throw ArgumentError('DateTime value cannot be null');
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.parse(value);
+    try {
+      return (value as dynamic).toDate();
+    } catch (e) {
+      throw ArgumentError('Invalid DateTime value: $value');
+    }
+  }
+
+  static DateTime? _parseDateTimeNullable(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.parse(value);
+    try {
+      return (value as dynamic).toDate();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  factory Task.fromMap(Map<String, dynamic> map) {
+    return Task(
+      id: map['id'],
+      userId: map['user_id'] ?? map['userId'] ?? '',
+      googleEventId: map['google_event_id'] ?? map['googleEventId'],
+      notionPageId: map['notion_page_id'] ?? map['notionPageId'],
+      titulo: map['titulo'] ?? '',
+      descricao: map['descricao'],
+      dataInicio: _parseDateTime(map['data_inicio'] ?? map['dataInicio']),
+      dataFim: _parseDateTime(map['data_fim'] ?? map['dataFim']),
+      duracaoMinutos: map['duracao_minutos'] ?? map['duracaoMinutos'] ?? 0,
+      prioridade: Prioridade.fromJson(map['prioridade'] ?? 'media'),
+      avisoAntesMinutos:
+          map['aviso_antes_minutos'] ?? map['avisoAntesMinutos'] ?? 10,
+      avisoDepoisMinutos:
+          map['aviso_depois_minutos'] ?? map['avisoDepoisMinutos'] ?? 5,
+      estado: EstadoTarefa.fromJson(map['estado'] ?? 'pendente'),
+      tempoRealMinutos: map['tempo_real_minutos'] ?? map['tempoRealMinutos'],
+      isNegotiable: (map['is_negotiable'] ?? map['isNegotiable']) == true ||
+          (map['is_negotiable'] == 1),
+      safetyMarginMinutes:
+          map['safety_margin_minutes'] ?? map['safetyMarginMinutes'] ?? 0,
+      sincronizado: (map['sincronizado'] == 1) ||
+          (map['sincronizado'] == true) ||
+          (map['googleCalendarSynced'] == true),
+      versao: map['versao'] ?? 1,
+      criadoEm: _parseDateTime(map['criado_em'] ?? map['criadoEm']),
+      atualizadoEm: _parseDateTime(map['atualizado_em'] ?? map['atualizadoEm']),
+      concluidoEm:
+          _parseDateTimeNullable(map['concluido_em'] ?? map['concluidoEm']),
+      syncStatus: SyncStatus.fromJson(
+          map['sync_status'] ?? map['syncStatus'] ?? 'synced'),
+      notionSynced: map['notionSynced'] ?? map['notion_synced'] ?? false,
+      googleCalendarSynced:
+          map['googleCalendarSynced'] ?? map['google_calendar_synced'] ?? false,
+    );
   }
 
   Map<String, dynamic> toMap() {
@@ -182,6 +259,7 @@ class Task {
       'id': id,
       'user_id': userId,
       'google_event_id': googleEventId,
+      'notion_page_id': notionPageId,
       'titulo': titulo,
       'descricao': descricao,
       'data_inicio': dataInicio.toIso8601String(),
@@ -194,61 +272,22 @@ class Task {
       'tempo_real_minutos': tempoRealMinutos,
       'is_negotiable': isNegotiable ? 1 : 0,
       'safety_margin_minutes': safetyMarginMinutes,
-      'sincronizado': sincronizado ? 1 : 0,
+      'sincronizado': googleCalendarSynced ? 1 : 0,
       'versao': versao,
       'criado_em': criadoEm.toIso8601String(),
       'atualizado_em': atualizadoEm.toIso8601String(),
       'concluido_em': concluidoEm?.toIso8601String(),
       'sync_status': syncStatus.toJson(),
+      'notionSynced': notionSynced,
+      'googleCalendarSynced': googleCalendarSynced,
     };
-  }
-
-  /// Helper para parse seguro de DateTime
-  static DateTime _parseDateTime(dynamic value) {
-    if (value == null) throw ArgumentError('DateTime value cannot be null');
-    if (value is DateTime) return value;
-    if (value is String) return DateTime.parse(value);
-    throw ArgumentError('Invalid DateTime value: $value');
-  }
-
-  /// Helper para parse seguro de DateTime nullable
-  static DateTime? _parseDateTimeNullable(dynamic value) {
-    if (value == null) return null;
-    if (value is DateTime) return value;
-    if (value is String) return DateTime.parse(value);
-    return null;
-  }
-
-  factory Task.fromMap(Map<String, dynamic> map) {
-    return Task(
-      id: map['id'],
-      userId: map['user_id'],
-      googleEventId: map['google_event_id'],
-      titulo: map['titulo'],
-      descricao: map['descricao'],
-      dataInicio: _parseDateTime(map['data_inicio']),
-      dataFim: _parseDateTime(map['data_fim']),
-      duracaoMinutos: map['duracao_minutos'],
-      prioridade: Prioridade.fromJson(map['prioridade']),
-      avisoAntesMinutos: map['aviso_antes_minutos'] ?? 10,
-      avisoDepoisMinutos: map['aviso_depois_minutos'] ?? 5,
-      estado: EstadoTarefa.fromJson(map['estado'] ?? 'pendente'),
-      tempoRealMinutos: map['tempo_real_minutos'],
-      isNegotiable: map['is_negotiable'] == 1,
-      safetyMarginMinutes: map['safety_margin_minutes'] ?? 0,
-      sincronizado: map['sincronizado'] == 1,
-      versao: map['versao'] ?? 1,
-      criadoEm: _parseDateTime(map['criado_em']),
-      atualizadoEm: _parseDateTime(map['atualizado_em']),
-      concluidoEm: _parseDateTimeNullable(map['concluido_em']),
-      syncStatus: SyncStatus.fromJson(map['sync_status'] ?? 'synced'),
-    );
   }
 
   Task copyWith({
     String? id,
     String? userId,
     String? googleEventId,
+    String? notionPageId,
     String? titulo,
     String? descricao,
     DateTime? dataInicio,
@@ -267,11 +306,14 @@ class Task {
     DateTime? atualizadoEm,
     DateTime? concluidoEm,
     SyncStatus? syncStatus,
+    bool? notionSynced,
+    bool? googleCalendarSynced,
   }) {
     return Task(
       id: id ?? this.id,
       userId: userId ?? this.userId,
       googleEventId: googleEventId ?? this.googleEventId,
+      notionPageId: notionPageId ?? this.notionPageId,
       titulo: titulo ?? this.titulo,
       descricao: descricao ?? this.descricao,
       dataInicio: dataInicio ?? this.dataInicio,
@@ -290,6 +332,8 @@ class Task {
       atualizadoEm: atualizadoEm ?? this.atualizadoEm,
       concluidoEm: concluidoEm ?? this.concluidoEm,
       syncStatus: syncStatus ?? this.syncStatus,
+      notionSynced: notionSynced ?? this.notionSynced,
+      googleCalendarSynced: googleCalendarSynced ?? this.googleCalendarSynced,
     );
   }
 

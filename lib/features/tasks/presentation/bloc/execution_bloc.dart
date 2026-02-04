@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../domain/entities/task.dart';
-import '../../data/repositories/task_repository.dart';
+import '../../../../core/repositories/task_firestore_repository.dart';
 import '../../../../core/services/notification_service.dart';
 
 // Events
@@ -82,6 +82,11 @@ class ExecutionPausedState extends ExecutionState {
       {required Task super.task, required super.elapsedSeconds});
 }
 
+class ExecutionFinishing extends ExecutionState {
+  const ExecutionFinishing(
+      {required Task super.task, required super.elapsedSeconds});
+}
+
 class ExecutionCompleted extends ExecutionState {
   final int totalTimeSpentMinutes;
 
@@ -97,13 +102,13 @@ class ExecutionCompleted extends ExecutionState {
 
 // BLoC
 class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
-  final TaskRepository _repository;
+  final TaskFirestoreRepository _repository;
   final NotificationService _notificationService;
 
   Timer? _timer;
 
   ExecutionBloc({
-    required TaskRepository repository,
+    required TaskFirestoreRepository repository,
     required NotificationService notificationService,
   })  : _repository = repository,
         _notificationService = notificationService,
@@ -199,6 +204,11 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
     if (task == null) return;
 
     final totalMinutes = (state.elapsedSeconds / 60).ceil();
+
+    emit(ExecutionFinishing(
+      task: task,
+      elapsedSeconds: state.elapsedSeconds,
+    ));
 
     try {
       await _repository.completeTask(task.id, totalMinutes);

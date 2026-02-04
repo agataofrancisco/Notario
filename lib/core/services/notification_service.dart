@@ -107,7 +107,7 @@ class NotificationService {
 
     await _notifications.zonedSchedule(
       taskId.hashCode, // ID único baseado no taskId
-      'Tarefa em 15 minutos',
+      'Tarefa em $minutesBefore minutos',
       title,
       tz.TZDateTime.from(reminderTime, tz.local),
       const NotificationDetails(

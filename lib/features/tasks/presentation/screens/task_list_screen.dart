@@ -3,9 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:notario/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:notario/features/auth/presentation/bloc/auth_state.dart';
 import '../bloc/task_bloc.dart';
-import '../widgets/task_card.dart';
+import '../widgets/task_list_item.dart';
 import './task_form_screen.dart';
-import './execution_screen.dart';
 
 class TaskListScreen extends StatefulWidget {
   const TaskListScreen({super.key});
@@ -80,33 +79,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
               separatorBuilder: (context, index) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final task = state.tasks[index];
-                return TaskCard(
+                return TaskListItem(
                   task: task,
-                  onTap: () {
-                    // Navigate to Edit
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => TaskFormScreen(task: task),
-                      ),
-                    );
-                  },
-                  onStart: () {
-                    // Navigate to Execution Mode
-                    // Import ExecutionScreen dynamicamente ou no topo se preferir
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ExecutionScreen(task: task),
-                      ),
-                    );
-                  },
-                  onSkip: () {
-                    // Logic to Skip task
-                    // Por enquanto, apenas mostra um snackbar
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text(
-                              'Funcionalidade de Pular em desenvolvimento')),
-                    );
+                  onDelete: () {
+                    context.read<TaskBloc>().add(TaskDeleteRequested(task.id));
                   },
                 );
               },

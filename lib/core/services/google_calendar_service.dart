@@ -178,6 +178,23 @@ class GoogleCalendarService {
     }
   }
 
+  /// Atualizar evento no Google Calendar a partir de uma tarefa
+  Future<calendar.Event?> updateEventFromTask({
+    required String eventId,
+    required String title,
+    required String? description,
+    required DateTime startTime,
+    required int durationMinutes,
+  }) async {
+    return updateEvent(
+      eventId: eventId,
+      title: title,
+      description: description,
+      startTime: startTime,
+      durationMinutes: durationMinutes,
+    );
+  }
+
   /// Deletar evento
   Future<void> deleteEvent(String eventId) async {
     if (_calendarApi == null) await initialize();

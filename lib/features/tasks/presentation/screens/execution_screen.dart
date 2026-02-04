@@ -3,7 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../domain/entities/task.dart';
 import '../bloc/execution_bloc.dart';
-import '../../data/repositories/task_repository.dart';
+import '../../../../core/repositories/task_firestore_repository.dart';
 import '../../../../core/services/notification_service.dart';
 import '../widgets/hourglass_timer.dart';
 
@@ -16,7 +16,7 @@ class ExecutionScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (context) => ExecutionBloc(
-        repository: context.read<TaskRepository>(),
+        repository: context.read<TaskFirestoreRepository>(),
         notificationService: NotificationService(),
       )..add(ExecutionStarted(task)),
       child: const _ExecutionView(),
@@ -211,105 +211,128 @@ class _ExecutionView extends StatelessWidget {
             if (progress < 0.2) timerColor = Colors.orange;
             if (isOvertime) timerColor = Colors.red;
 
-            return Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 20),
-                  Text(
-                    task.titulo,
-                    style: GoogleFonts.inter(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  if (task.descricao != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      task.descricao!,
-                      style: GoogleFonts.inter(),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                  const Spacer(),
-                  Stack(
-                    alignment: Alignment.center,
+            final isFinishing = state is ExecutionFinishing;
+
+            return Stack(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      SizedBox(
-                        width: 250,
-                        height: 250,
-                        child: HourglassTimer(
-                          progress: progress,
-                          size: 250,
-                          color: timerColor,
+                      const SizedBox(height: 20),
+                      Text(
+                        task.titulo,
+                        style: GoogleFonts.inter(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
                         ),
+                        textAlign: TextAlign.center,
                       ),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
+                      if (task.descricao != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          task.descricao!,
+                          style: GoogleFonts.inter(),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                      const Spacer(),
+                      Stack(
+                        alignment: Alignment.center,
                         children: [
-                          Text(
-                            isOvertime ? 'TEMPO EXTRA' : 'RESTANTE',
-                            style: GoogleFonts.inter(
-                              color: Colors.grey,
-                              fontSize: 12,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                          Text(
-                            _formatTime(isOvertime
-                                ? elapsed - totalSeconds
-                                : remainingSeconds),
-                            style: GoogleFonts.inter(
-                              fontSize: 48,
-                              fontWeight: FontWeight.bold,
+                          SizedBox(
+                            width: 250,
+                            height: 250,
+                            child: HourglassTimer(
+                              progress: progress,
+                              size: 250,
                               color: timerColor,
                             ),
                           ),
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                isOvertime ? 'TEMPO EXTRA' : 'RESTANTE',
+                                style: GoogleFonts.inter(
+                                  color: Colors.grey,
+                                  fontSize: 12,
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
+                              Text(
+                                _formatTime(isOvertime
+                                    ? elapsed - totalSeconds
+                                    : remainingSeconds),
+                                style: GoogleFonts.inter(
+                                  fontSize: 48,
+                                  fontWeight: FontWeight.bold,
+                                  color: timerColor,
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (state is ExecutionRunning)
-                        FloatingActionButton.large(
-                          onPressed: () {
-                            context
-                                .read<ExecutionBloc>()
-                                .add(ExecutionPaused());
-                          },
-                          backgroundColor: Colors.orange,
-                          child: const Icon(Icons.pause, size: 32),
-                        )
-                      else if (state is ExecutionPausedState)
-                        FloatingActionButton.large(
-                          onPressed: () {
-                            context
-                                .read<ExecutionBloc>()
-                                .add(ExecutionResumed());
-                          },
-                          backgroundColor: Colors.green,
-                          child: const Icon(Icons.play_arrow, size: 32),
-                        ),
-                      const SizedBox(width: 32),
-                      FloatingActionButton.large(
-                        onPressed: () {
-                          context
-                              .read<ExecutionBloc>()
-                              .add(ExecutionFinished());
-                        },
-                        backgroundColor: Theme.of(context).primaryColor,
-                        child: const Icon(Icons.check, size: 32),
+                      const Spacer(),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (state is ExecutionRunning)
+                            FloatingActionButton.large(
+                              onPressed: isFinishing
+                                  ? null
+                                  : () {
+                                      context
+                                          .read<ExecutionBloc>()
+                                          .add(ExecutionPaused());
+                                    },
+                              backgroundColor:
+                                  isFinishing ? Colors.grey : Colors.orange,
+                              child: const Icon(Icons.pause, size: 32),
+                            )
+                          else if (state is ExecutionPausedState)
+                            FloatingActionButton.large(
+                              onPressed: isFinishing
+                                  ? null
+                                  : () {
+                                      context
+                                          .read<ExecutionBloc>()
+                                          .add(ExecutionResumed());
+                                    },
+                              backgroundColor:
+                                  isFinishing ? Colors.grey : Colors.green,
+                              child: const Icon(Icons.play_arrow, size: 32),
+                            ),
+                          const SizedBox(width: 32),
+                          FloatingActionButton.large(
+                            onPressed: isFinishing
+                                ? null
+                                : () {
+                                    context
+                                        .read<ExecutionBloc>()
+                                        .add(ExecutionFinished());
+                                  },
+                            backgroundColor: isFinishing
+                                ? Colors.grey
+                                : Theme.of(context).primaryColor,
+                            child: const Icon(Icons.check, size: 32),
+                          ),
+                        ],
                       ),
+                      const SizedBox(height: 40),
                     ],
                   ),
-                  const SizedBox(height: 40),
-                ],
-              ),
+                ),
+                if (isFinishing)
+                  Container(
+                    color: Colors.black26,
+                    child: const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+              ],
             );
           },
         ),
