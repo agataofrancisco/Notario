@@ -132,6 +132,43 @@ class NotificationService {
     );
   }
 
+  /// Agendar notificação no horário da tarefa
+  Future<void> scheduleTaskStartNotification({
+    required String taskId,
+    required String title,
+    required DateTime startTime,
+  }) async {
+    if (!_initialized) await initialize();
+
+    if (startTime.isBefore(DateTime.now())) return;
+
+    await _notifications.zonedSchedule(
+      'start_$taskId'.hashCode,
+      'Hora da tarefa! ⏰',
+      title,
+      tz.TZDateTime.from(startTime, tz.local),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'task_start',
+          'Início de Tarefas',
+          channelDescription: 'Notificações no horário da tarefa',
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: 'task_start:$taskId',
+    );
+  }
+
   /// Agendar notificação de nota
   Future<void> scheduleNoteReminder({
     required String noteId,

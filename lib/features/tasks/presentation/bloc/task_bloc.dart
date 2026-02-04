@@ -362,6 +362,11 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
         startTime: taskToSave.dataInicio,
         minutesBefore: taskToSave.avisoAntesMinutos,
       );
+      await _notificationService.scheduleTaskStartNotification(
+        taskId: taskToSave.id,
+        title: taskToSave.titulo,
+        startTime: taskToSave.dataInicio,
+      );
 
       // 4) Garantir que os flags finais estão no Firestore
       await _repository.update(taskToSave);
@@ -423,11 +428,17 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
 
       // 3) Atualizar lembrete local
       await _notificationService.cancelNotification(taskToSave.id);
+      await _notificationService.cancelNotification('start_${taskToSave.id}');
       await _notificationService.scheduleTaskReminder(
         taskId: taskToSave.id,
         title: taskToSave.titulo,
         startTime: taskToSave.dataInicio,
         minutesBefore: taskToSave.avisoAntesMinutos,
+      );
+      await _notificationService.scheduleTaskStartNotification(
+        taskId: taskToSave.id,
+        title: taskToSave.titulo,
+        startTime: taskToSave.dataInicio,
       );
       emit(const TaskOperationSuccess('Tarefa atualizada com sucesso!'));
     } catch (e) {
@@ -453,6 +464,7 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
       }
 
       await _notificationService.cancelNotification(event.taskId);
+      await _notificationService.cancelNotification('start_${event.taskId}');
       await _repository.delete(event.taskId);
       emit(const TaskOperationSuccess('Tarefa eliminada com sucesso!'));
     } catch (e) {
