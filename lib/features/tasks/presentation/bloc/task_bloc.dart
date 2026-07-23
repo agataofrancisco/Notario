@@ -4,7 +4,6 @@ import '../../domain/entities/task.dart';
 import '../../../../core/repositories/task_firestore_repository.dart';
 import '../../../../core/services/google_calendar_service.dart';
 import '../../../../core/services/notification_service.dart';
-import '../../../../core/services/notion_service.dart';
 
 // Events
 abstract class TaskEvent extends Equatable {
@@ -246,19 +245,16 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
   final TaskFirestoreRepository _repository;
   final GoogleCalendarService _googleCalendarService;
   final NotificationService _notificationService;
-  final NotionService _notionService; // Injected
   final bool _enableGoogleCalendar;
 
   TaskBloc({
     required TaskFirestoreRepository repository,
     required GoogleCalendarService googleCalendarService,
     required NotificationService notificationService,
-    NotionService? notionService,
     bool enableGoogleCalendar = false,
   })  : _repository = repository,
         _googleCalendarService = googleCalendarService,
         _notificationService = notificationService,
-        _notionService = notionService ?? NotionService(),
         _enableGoogleCalendar = enableGoogleCalendar,
         super(TaskInitial()) {
     on<TaskLoadRequested>(_onLoadRequested);
@@ -339,21 +335,6 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
 
       // 2) Persistir no Firestore
       await _repository.create(taskToSave);
-
-      // 2.5) Sincronizar com Notion (não bloqueia)
-      try {
-        final notionId = await _notionService.createTask(taskToSave);
-        if (notionId != null) {
-          taskToSave = taskToSave.copyWith(
-            notionPageId: notionId,
-            notionSynced: true,
-          );
-        } else {
-          taskToSave = taskToSave.copyWith(notionSynced: false);
-        }
-      } catch (_) {
-        taskToSave = taskToSave.copyWith(notionSynced: false);
-      }
 
       // 3) Lembrete local
       await _notificationService.scheduleTaskReminder(

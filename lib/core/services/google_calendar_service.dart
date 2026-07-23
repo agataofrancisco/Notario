@@ -2,6 +2,7 @@ import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 
 /// Serviço para integração com Google Calendar
 class GoogleCalendarService {
@@ -91,8 +92,7 @@ class GoogleCalendarService {
         try {
           await initialize();
         } catch (e) {
-          // Falha na inicialização - retornar null em vez de lançar exceção
-          print('Falha ao inicializar Google Calendar: $e');
+          if (kDebugMode) print('Falha ao inicializar Google Calendar: $e');
           return null;
         }
       }
@@ -121,16 +121,16 @@ class GoogleCalendarService {
       return await _calendarApi!.events.insert(event, 'primary');
     } on calendar.DetailedApiRequestError catch (e) {
       // Erro específico da API do Google Calendar
-      print('Erro da API do Google Calendar: ${e.status} - ${e.message}');
+      if (kDebugMode) print('Erro da API do Google Calendar: ${e.status} - ${e.message}');
       if (e.status == 403) {
-        print('Permissão negada. Verifique as permissões do Google Calendar.');
+        if (kDebugMode) print('Permissão negada. Verifique as permissões do Google Calendar.');
       } else if (e.status == 409) {
-        print('Conflito ao criar evento. O dia pode estar cheio.');
+        if (kDebugMode) print('Conflito ao criar evento. O dia pode estar cheio.');
       }
       return null;
     } catch (e) {
       // Outros erros (rede, parsing, etc)
-      print('Erro inesperado ao criar evento no Google Calendar: $e');
+      if (kDebugMode) print('Erro inesperado ao criar evento no Google Calendar: $e');
       return null;
     }
   }
@@ -148,7 +148,7 @@ class GoogleCalendarService {
         try {
           await initialize();
         } catch (e) {
-          print('Falha ao inicializar Google Calendar: $e');
+          if (kDebugMode) print('Falha ao inicializar Google Calendar: $e');
           return null;
         }
       }
@@ -169,11 +169,12 @@ class GoogleCalendarService {
 
       return await _calendarApi!.events.update(event, 'primary', eventId);
     } on calendar.DetailedApiRequestError catch (e) {
-      print(
-          'Erro da API do Google Calendar ao atualizar: ${e.status} - ${e.message}');
+      if (kDebugMode) {
+        print('Erro da API do Google Calendar ao atualizar: ${e.status} - ${e.message}');
+      }
       return null;
     } catch (e) {
-      print('Erro inesperado ao atualizar evento no Google Calendar: $e');
+      if (kDebugMode) print('Erro inesperado ao atualizar evento no Google Calendar: $e');
       return null;
     }
   }

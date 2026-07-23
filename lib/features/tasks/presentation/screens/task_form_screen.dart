@@ -167,11 +167,11 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: Row(
+          title: const Row(
             children: [
               Icon(Icons.check_circle, color: Colors.green),
-              const SizedBox(width: 8),
-              const Text('Dia Viável'),
+              SizedBox(width: 8),
+              Text('Dia Viável'),
             ],
           ),
           content: Column(
@@ -183,17 +183,17 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
+                  color: Colors.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.access_time, color: Colors.green),
+                    const Icon(Icons.access_time, color: Colors.green),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Tempo livre: ${result.tempoLivreMinutos} min (${(result.tempoLivreMinutos / 60).toStringAsFixed(1)}h)',
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: Colors.green,
                           fontWeight: FontWeight.bold,
                         ),
@@ -254,11 +254,11 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            title: Row(
+            title: const Row(
               children: [
                 Icon(Icons.block, color: Colors.red),
-                const SizedBox(width: 8),
-                const Text('Dia Lotado'),
+                SizedBox(width: 8),
+                Text('Dia Lotado'),
               ],
             ),
             content: Column(
@@ -268,9 +268,9 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
+                    color: Colors.red.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.withOpacity(0.3)),
+                    border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
                   ),
                   child: Text(
                     result.mensagem,
@@ -344,6 +344,16 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.isEditing ? 'Editar Tarefa' : 'Nova Tarefa'),
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+            ),
+          ),
+        ),
         actions: [
           IconButton(
             icon: _isValidating
@@ -555,7 +565,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<int>(
-                  value: widget.task?.avisoAntesMinutos ?? 10,
+                  initialValue: widget.task?.avisoAntesMinutos ?? 10,
                   decoration: const InputDecoration(
                     labelText: 'Lembrete *',
                     prefixIcon: Icon(Icons.notifications),

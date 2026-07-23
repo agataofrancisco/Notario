@@ -49,8 +49,8 @@ class TaskListItem extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             side: BorderSide(
                 color: isDisabled
-                    ? Colors.grey.withOpacity(0.3)
-                    : priorityColor.withOpacity(0.7),
+                    ? Colors.grey.withValues(alpha: 0.3)
+                    : priorityColor.withValues(alpha: 0.7),
                 width: 1),
           ),
           child: InkWell(
@@ -92,10 +92,10 @@ class TaskListItem extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.2),
+                            color: Colors.green.withValues(alpha: 0.2),
                             shape: BoxShape.circle,
                           ),
-                          child: Icon(
+                          child: const Icon(
                             Icons.check_circle,
                             color: Colors.green,
                             size: 24,
@@ -146,7 +146,7 @@ class TaskListItem extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Icon(Icons.check_circle_outline,
+                        const Icon(Icons.check_circle_outline,
                             size: 14, color: Colors.green),
                         const SizedBox(width: 4),
                         Text(
@@ -279,32 +279,20 @@ class TaskListItem extends StatelessWidget {
   }
 
   Color _getPriorityColor(Prioridade prioridade) {
-    switch (prioridade) {
-      case Prioridade.alta:
-        return Colors.red.shade400;
-      case Prioridade.media:
-        return Colors.orange.shade400;
-      case Prioridade.baixa:
-        return Colors.blue.shade400; // Blue to match theme
-      default:
-        return Colors.grey;
-    }
+    return switch (prioridade) {
+      Prioridade.alta => Colors.red.shade400,
+      Prioridade.media => Colors.orange.shade400,
+      Prioridade.baixa => Colors.blue.shade400,
+    };
   }
 
   IconData _getStatusIcon(EstadoTarefa estado) {
-    switch (estado) {
-      case EstadoTarefa.pendente:
-        return Icons.hourglass_empty_rounded;
-      case EstadoTarefa.emExecucao:
-        return Icons.play_circle_fill_rounded;
-      case EstadoTarefa.concluida:
-        return Icons.check_circle;
-      case EstadoTarefa.cancelada:
-        return Icons.cancel_rounded;
-      case EstadoTarefa.pulada:
-        return Icons.skip_next_rounded;
-      default:
-        return Icons.help_outline_rounded;
-    }
+    return switch (estado) {
+      EstadoTarefa.pendente => Icons.hourglass_empty_rounded,
+      EstadoTarefa.emExecucao => Icons.play_circle_fill_rounded,
+      EstadoTarefa.concluida => Icons.check_circle,
+      EstadoTarefa.cancelada => Icons.cancel_rounded,
+      EstadoTarefa.pulada => Icons.skip_next_rounded,
+    };
   }
 }

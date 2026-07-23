@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/google_calendar_service.dart';
 import 'core/services/notification_service.dart';
-import 'core/services/notion_service.dart';
 import 'core/services/statistics_service.dart';
 import 'core/services/weekly_notification_service.dart';
 import 'core/repositories/task_firestore_repository.dart';
@@ -47,11 +46,11 @@ class NotarioApp extends StatelessWidget {
       if (nav == null) return;
 
       if (payload.startsWith('task:')) {
-        nav.pushNamed('/tasks');
+        nav.push(MaterialPageRoute(builder: (_) => const TaskListScreen()));
         return;
       }
       if (payload.startsWith('note:')) {
-        nav.pushNamed('/notes');
+        nav.push(MaterialPageRoute(builder: (_) => const NoteListScreen()));
         return;
       }
       if (payload.startsWith('execution:')) {
@@ -96,9 +95,6 @@ class NotarioApp extends StatelessWidget {
         RepositoryProvider<NoteRepository>(
           create: (context) => NoteRepository(),
         ),
-        RepositoryProvider<NotionService>(
-          create: (context) => NotionService(),
-        ),
         RepositoryProvider<StatisticsService>(
           create: (context) =>
               StatisticsService(context.read<TaskRepository>()),
@@ -106,8 +102,6 @@ class NotarioApp extends StatelessWidget {
         RepositoryProvider<SyncService>(
           create: (context) => SyncService(
             taskRepository: context.read<TaskFirestoreRepository>(),
-            noteRepository: context.read<NoteRepository>(),
-            notionService: context.read<NotionService>(),
             calendarService: context.read<GoogleCalendarService>(),
           ),
         ),
@@ -125,7 +119,6 @@ class NotarioApp extends StatelessWidget {
               repository: context.read<TaskFirestoreRepository>(),
               googleCalendarService: context.read<GoogleCalendarService>(),
               notificationService: context.read<NotificationService>(),
-              notionService: context.read<NotionService>(),
               enableGoogleCalendar: AppConfig.enableGoogleCalendar,
             ),
           ),
@@ -138,7 +131,6 @@ class NotarioApp extends StatelessWidget {
             create: (context) => NoteBloc(
               repository: context.read<NoteRepository>(),
               notificationService: context.read<NotificationService>(),
-              notionService: context.read<NotionService>(),
             ),
           ),
         ],
@@ -149,10 +141,6 @@ class NotarioApp extends StatelessWidget {
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: ThemeMode.system,
-          routes: {
-            '/tasks': (_) => const TaskListScreen(),
-            '/notes': (_) => const NoteListScreen(),
-          },
           home: BlocBuilder<AuthBloc, AuthState>(
             builder: (context, state) {
               if (state is AuthLoading || state is AuthInitial) {
@@ -172,7 +160,7 @@ class NotarioApp extends StatelessWidget {
                   await weeklyService
                       .checkAndSendMissedNotifications(state.user.uid);
 
-                  // Iniciar sincronização em segundo plano
+                  if (!context.mounted) return;
                   context.read<SyncService>().startPeriodicSync();
                 });
 

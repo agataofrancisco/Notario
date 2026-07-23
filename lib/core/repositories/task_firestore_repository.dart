@@ -1,15 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../features/tasks/domain/entities/task.dart';
-import '../services/notion_service.dart';
 
 /// Repositório de tarefas usando Firestore
-/// Substitui o antigo TaskRepository que usava SQLite
 class TaskFirestoreRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final NotionService _notionService;
-
-  TaskFirestoreRepository({NotionService? notionService})
-      : _notionService = notionService ?? NotionService();
 
   // Referência à coleção de tarefas
   CollectionReference get _tasksCollection => _firestore.collection('tasks');
@@ -158,18 +152,6 @@ class TaskFirestoreRepository {
       'concluidoEm': Timestamp.fromDate(now),
       'atualizadoEm': FieldValue.serverTimestamp(),
     });
-
-    // Sincronizar com Notion se houver notionPageId
-    final task = await getById(taskId);
-    if (task != null && task.notionPageId != null) {
-      final success =
-          await _notionService.updateTaskStatus(task.notionPageId!, true);
-      if (success) {
-        await _tasksCollection.doc(taskId).update({'notionSynced': true});
-      } else {
-        await _tasksCollection.doc(taskId).update({'notionSynced': false});
-      }
-    }
   }
 
   /// Pular tarefa
@@ -238,7 +220,7 @@ class TaskFirestoreRepository {
 
       // 2. Calcular tempo ocupado
       final tempoOcupado =
-          tasks.fold<int>(0, (sum, task) => sum + task.duracaoMinutos);
+          tasks.fold<int>(0, (total, task) => total + task.duracaoMinutos);
       final tempoLivre = minutosUteisDia - tempoOcupado;
       final percentual = (tempoOcupado / minutosUteisDia * 100).round();
 
@@ -435,10 +417,10 @@ class TaskFirestoreRepository {
           .where('dataInicio', isLessThan: Timestamp.fromDate(end))
           .where('estado', whereIn: ['pendente', 'emExecucao']).get();
 
-      final ocupado = snapshot.docs.fold<int>(0, (sum, doc) {
+      final ocupado = snapshot.docs.fold<int>(0, (total, doc) {
         final data = doc.data() as Map<String, dynamic>?;
-        if (data == null) return sum;
-        return sum + ((data['duracaoMinutos'] as num?)?.toInt() ?? 0);
+        if (data == null) return total;
+        return total + ((data['duracaoMinutos'] as num?)?.toInt() ?? 0);
       });
 
       if (960 - ocupado >= duracaoNecessaria) dias.add(dia);
@@ -574,10 +556,10 @@ class TaskFirestoreRepository {
 
       // Tempo total planejado vs realizado
       final tempoPlaneado =
-          tasks.fold<int>(0, (sum, t) => sum + t.duracaoMinutos);
+          tasks.fold<int>(0, (total, t) => total + t.duracaoMinutos);
       final tempoRealizado = tasks
           .where((t) => t.isConcluida && t.tempoRealMinutos != null)
-          .fold<int>(0, (sum, t) => sum + (t.tempoRealMinutos ?? 0));
+          .fold<int>(0, (total, t) => total + (t.tempoRealMinutos ?? 0));
 
       return {
         'semanaInicio': weekStart.toIso8601String(),

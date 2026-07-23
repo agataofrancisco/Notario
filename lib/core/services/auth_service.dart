@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/foundation.dart';
 import '../domain/entities/app_user.dart';
 import '../config/app_config.dart';
 
@@ -34,8 +35,9 @@ class AuthService {
   Stream<AppUser?> get authStateChanges {
     return _auth.authStateChanges().map((user) {
       if (user != null) return AppUser.fromFirebase(user);
-      if (_currentGoogleUser != null)
+      if (_currentGoogleUser != null) {
         return AppUser.fromGoogle(_currentGoogleUser!);
+      }
       return null;
     });
   }
@@ -102,8 +104,8 @@ class AuthService {
       _currentGoogleUser = googleUser;
       return AppUser.fromGoogle(googleUser);
     } catch (e) {
-      print('Erro no login Google: $e');
-      throw e;
+      if (kDebugMode) print('Erro no login Google: $e');
+      rethrow;
     }
   }
 

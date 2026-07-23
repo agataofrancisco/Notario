@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 import '../bloc/stats_bloc.dart';
@@ -33,10 +32,7 @@ class _StatsScreenState extends State<StatsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Estatísticas',
-          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-        ),
+        title: const Text('Estatísticas'),
         elevation: 0,
       ),
       body: BlocBuilder<StatsBloc, StatsState>(
@@ -54,15 +50,12 @@ class _StatsScreenState extends State<StatsScreen> {
                   const SizedBox(height: 16),
                   Text(
                     'Erro ao carregar estatísticas',
-                    style: GoogleFonts.inter(
-                      fontSize: 18,
-                      color: Colors.grey[700],
-                    ),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.grey[700]),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     state.message,
-                    style: GoogleFonts.inter(color: Colors.grey[600]),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
@@ -114,10 +107,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 const SizedBox(height: 16),
                 Text(
                   'Carregue suas estatísticas',
-                  style: GoogleFonts.inter(
-                    fontSize: 18,
-                    color: Colors.grey[700],
-                  ),
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.grey[700]),
                 ),
               ],
             ),
@@ -138,10 +128,7 @@ class _StatsScreenState extends State<StatsScreen> {
           children: [
             Text(
               'Conquistas',
-              style: GoogleFonts.inter(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             Row(
@@ -180,7 +167,7 @@ class _StatsScreenState extends State<StatsScreen> {
       padding: const EdgeInsets.all(12),
       margin: const EdgeInsets.only(right: 8),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -189,19 +176,12 @@ class _StatsScreenState extends State<StatsScreen> {
           const SizedBox(height: 8),
           Text(
             value,
-            style: GoogleFonts.inter(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: color),
           ),
           const SizedBox(height: 4),
           Text(
             title,
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              color: Colors.grey[600],
-            ),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
             textAlign: TextAlign.center,
           ),
         ],
@@ -220,10 +200,7 @@ class _StatsScreenState extends State<StatsScreen> {
           children: [
             Text(
               'Detalhes da Semana',
-              style: GoogleFonts.inter(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             ...weeklyStats.map((stats) => _buildDayRow(stats)),
@@ -245,11 +222,7 @@ class _StatsScreenState extends State<StatsScreen> {
             width: 60,
             child: Text(
               '${stats.date.day}/${stats.date.month}',
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[700],
-              ),
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
           Expanded(
@@ -274,11 +247,7 @@ class _StatsScreenState extends State<StatsScreen> {
                     const SizedBox(width: 8),
                     Text(
                       hasData ? '${completionRate.toStringAsFixed(0)}%' : '-',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: _getColorForRate(completionRate),
-                      ),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold, color: _getColorForRate(completionRate)),
                     ),
                   ],
                 ),
@@ -287,10 +256,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   hasData
                       ? '${stats.completedTasks}/${stats.totalTasks} tarefas'
                       : 'Sem tarefas',
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    color: Colors.grey[600],
-                  ),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
                 ),
               ],
             ),

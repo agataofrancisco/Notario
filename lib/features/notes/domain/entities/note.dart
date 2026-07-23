@@ -8,7 +8,6 @@ class Note extends Equatable {
   final String conteudo;
   final DateTime? lembrete; // Quando o usuário quer ser lembrado
   final bool notificacaoEnviada;
-  final bool notionSynced;
   final DateTime criadoEm;
   final DateTime atualizadoEm;
 
@@ -19,7 +18,6 @@ class Note extends Equatable {
     required this.conteudo,
     this.lembrete,
     this.notificacaoEnviada = false,
-    this.notionSynced = false,
     required this.criadoEm,
     required this.atualizadoEm,
   });
@@ -32,7 +30,6 @@ class Note extends Equatable {
         conteudo,
         lembrete,
         notificacaoEnviada,
-        notionSynced,
         criadoEm,
         atualizadoEm,
       ];
@@ -44,7 +41,6 @@ class Note extends Equatable {
     String? conteudo,
     DateTime? lembrete,
     bool? notificacaoEnviada,
-    bool? notionSynced,
     DateTime? criadoEm,
     DateTime? atualizadoEm,
   }) {
@@ -55,7 +51,6 @@ class Note extends Equatable {
       conteudo: conteudo ?? this.conteudo,
       lembrete: lembrete ?? this.lembrete,
       notificacaoEnviada: notificacaoEnviada ?? this.notificacaoEnviada,
-      notionSynced: notionSynced ?? this.notionSynced,
       criadoEm: criadoEm ?? this.criadoEm,
       atualizadoEm: atualizadoEm ?? this.atualizadoEm,
     );
@@ -69,7 +64,6 @@ class Note extends Equatable {
       'conteudo': conteudo,
       'lembrete': lembrete?.toIso8601String(),
       'notificacaoEnviada': notificacaoEnviada,
-      'notionSynced': notionSynced,
       'criadoEm': criadoEm.toIso8601String(),
       'atualizadoEm': atualizadoEm.toIso8601String(),
     };
@@ -85,7 +79,6 @@ class Note extends Equatable {
           ? DateTime.parse(json['lembrete'] as String)
           : null,
       notificacaoEnviada: json['notificacaoEnviada'] as bool? ?? false,
-      notionSynced: json['notionSynced'] as bool? ?? false,
       criadoEm: DateTime.parse(json['criadoEm'] as String),
       atualizadoEm: DateTime.parse(json['atualizadoEm'] as String),
     );
@@ -100,7 +93,6 @@ class Note extends Equatable {
       'conteudo': conteudo,
       'data_lembrete': lembrete?.toIso8601String(),
       'notificacao_enviada': notificacaoEnviada ? 1 : 0,
-      'notion_synced': notionSynced ? 1 : 0,
       'criado_em': criadoEm.toIso8601String(),
       'atualizado_em': atualizadoEm.toIso8601String(),
     };
@@ -117,7 +109,6 @@ class Note extends Equatable {
           ? DateTime.parse((map['data_lembrete'] ?? map['lembrete']) as String)
           : null,
       notificacaoEnviada: (map['notificacao_enviada'] as int? ?? 0) == 1 || (map['notificacaoEnviada'] == true),
-      notionSynced: (map['notion_synced'] as int? ?? 0) == 1 || (map['notionSynced'] == true),
       criadoEm: DateTime.parse((map['criado_em'] ?? map['criadoEm']) as String),
       atualizadoEm: DateTime.parse((map['atualizado_em'] ?? map['atualizadoEm']) as String),
     );

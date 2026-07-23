@@ -3,7 +3,6 @@ import 'package:equatable/equatable.dart';
 import '../../domain/entities/note.dart';
 import '../../data/repositories/note_repository.dart';
 import '../../../../core/services/notification_service.dart';
-import '../../../../core/services/notion_service.dart';
 
 // Events
 abstract class NoteEvent extends Equatable {
@@ -92,15 +91,12 @@ class NoteError extends NoteState {
 class NoteBloc extends Bloc<NoteEvent, NoteState> {
   final NoteRepository _repository;
   final NotificationService _notificationService;
-  final NotionService _notionService;
 
   NoteBloc({
     required NoteRepository repository,
     required NotificationService notificationService,
-    NotionService? notionService,
   })  : _repository = repository,
         _notificationService = notificationService,
-        _notionService = notionService ?? NotionService(),
         super(NoteInitial()) {
     on<NoteLoadRequested>(_onLoadRequested);
     on<NoteCreateRequested>(_onCreateRequested);
@@ -131,18 +127,6 @@ class NoteBloc extends Bloc<NoteEvent, NoteState> {
   ) async {
     try {
       await _repository.create(event.note);
-
-      // Sincronizar com Notion (não bloqueia)
-      try {
-        final notionId = await _notionService.createNote(event.note);
-        if (notionId != null) {
-          await _repository.update(event.note.copyWith(notionSynced: true));
-        } else {
-          await _repository.update(event.note.copyWith(notionSynced: false));
-        }
-      } catch (_) {
-        await _repository.update(event.note.copyWith(notionSynced: false));
-      }
 
       // Agendar notificação se houver lembrete
       if (event.note.lembrete != null) {

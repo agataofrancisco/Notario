@@ -82,7 +82,7 @@ class _HourglassPainter extends CustomPainter {
       ..strokeWidth = 4;
 
     final fillPaint = Paint()
-      ..color = color.withOpacity(0.8)
+      ..color = color.withValues(alpha: 0.8)
       ..style = PaintingStyle.fill;
 
     // Glass shape path
@@ -127,7 +127,7 @@ class _HourglassPainter extends CustomPainter {
     // Draw Falling Sand (Stream)
     if (progress < 1.0) {
       final streamPaint = Paint()
-        ..color = color.withOpacity(0.6)
+        ..color = color.withValues(alpha: 0.6)
         ..strokeWidth = 2;
       canvas.drawLine(
           Offset(cx, h / 2),

@@ -31,22 +31,6 @@ class AppConfig {
   static const String tokenCacheKey = 'jwt_token';
   static const String lastSyncKey = 'last_sync_time';
 
-  /// Feature flag: integração com Google Calendar (OAuth) — mantém false por padrão
-  /// Ativar com: `--dart-define=ENABLE_GOOGLE_CALENDAR=true`
-  static const bool enableGoogleCalendar = bool.fromEnvironment(
-    'ENABLE_GOOGLE_CALENDAR',
-    defaultValue: false,
-  );
-
-  // --- Integração Notion ---
-  static const String notionApiUrl = 'https://api.notion.com/v1';
-  static const String notionApiVersion = '2022-06-28';
-
-  // Token fornecido pelo usuário
-  static const String notionApiToken =
-      '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';
-
-  // Database ID fornecido pelo usuário
-  static const String notionTaskDatabaseId = '2f5d1889d1788087bd7bf3c712533a40';
-  static const String notionNoteDatabaseId = '2f5d1889d1788087bd7bf3c712533a40';
+  /// Feature flag: integração com Google Calendar (OAuth) — ativo por padrão
+  static const bool enableGoogleCalendar = true;
 }

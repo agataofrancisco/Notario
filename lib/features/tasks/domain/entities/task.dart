@@ -68,7 +68,6 @@ class Task {
   final String id;
   final String userId;
   final String? googleEventId;
-  final String? notionPageId;
   final String titulo;
   final String? descricao;
   final DateTime dataInicio;
@@ -87,14 +86,12 @@ class Task {
   final DateTime atualizadoEm;
   final DateTime? concluidoEm;
   final SyncStatus syncStatus;
-  final bool notionSynced;
   final bool googleCalendarSynced;
 
   Task({
     required this.id,
     required this.userId,
     this.googleEventId,
-    this.notionPageId,
     required this.titulo,
     this.descricao,
     required this.dataInicio,
@@ -113,7 +110,6 @@ class Task {
     required this.atualizadoEm,
     this.concluidoEm,
     this.syncStatus = SyncStatus.synced,
-    this.notionSynced = false,
     this.googleCalendarSynced = false,
   });
 
@@ -132,7 +128,6 @@ class Task {
       id: json['id'],
       userId: json['userId'] ?? json['user_id'] ?? '',
       googleEventId: json['googleEventId'] ?? json['google_event_id'],
-      notionPageId: json['notionPageId'] ?? json['notion_page_id'],
       titulo: json['titulo'] ?? '',
       descricao: json['descricao'],
       dataInicio: parseDateTime(json['dataInicio'] ?? json['data_inicio']),
@@ -158,7 +153,6 @@ class Task {
           : null,
       syncStatus: SyncStatus.fromJson(
           json['syncStatus'] ?? json['sync_status'] ?? 'synced'),
-      notionSynced: json['notionSynced'] ?? json['notion_synced'] ?? false,
       googleCalendarSynced: json['googleCalendarSynced'] ??
           json['google_calendar_synced'] ??
           json['sincronizado'] ??
@@ -171,7 +165,6 @@ class Task {
       'id': id,
       'userId': userId,
       'googleEventId': googleEventId,
-      'notionPageId': notionPageId,
       'titulo': titulo,
       'descricao': descricao,
       'dataInicio': dataInicio,
@@ -189,7 +182,6 @@ class Task {
       'criadoEm': criadoEm,
       'atualizadoEm': atualizadoEm,
       'concluidoEm': concluidoEm,
-      'notionSynced': notionSynced,
       'googleCalendarSynced': googleCalendarSynced,
     };
   }
@@ -221,7 +213,6 @@ class Task {
       id: map['id'],
       userId: map['user_id'] ?? map['userId'] ?? '',
       googleEventId: map['google_event_id'] ?? map['googleEventId'],
-      notionPageId: map['notion_page_id'] ?? map['notionPageId'],
       titulo: map['titulo'] ?? '',
       descricao: map['descricao'],
       dataInicio: _parseDateTime(map['data_inicio'] ?? map['dataInicio']),
@@ -248,7 +239,6 @@ class Task {
           _parseDateTimeNullable(map['concluido_em'] ?? map['concluidoEm']),
       syncStatus: SyncStatus.fromJson(
           map['sync_status'] ?? map['syncStatus'] ?? 'synced'),
-      notionSynced: map['notionSynced'] ?? map['notion_synced'] ?? false,
       googleCalendarSynced:
           map['googleCalendarSynced'] ?? map['google_calendar_synced'] ?? false,
     );
@@ -259,7 +249,6 @@ class Task {
       'id': id,
       'user_id': userId,
       'google_event_id': googleEventId,
-      'notion_page_id': notionPageId,
       'titulo': titulo,
       'descricao': descricao,
       'data_inicio': dataInicio.toIso8601String(),
@@ -278,7 +267,6 @@ class Task {
       'atualizado_em': atualizadoEm.toIso8601String(),
       'concluido_em': concluidoEm?.toIso8601String(),
       'sync_status': syncStatus.toJson(),
-      'notionSynced': notionSynced,
       'googleCalendarSynced': googleCalendarSynced,
     };
   }
@@ -287,7 +275,6 @@ class Task {
     String? id,
     String? userId,
     String? googleEventId,
-    String? notionPageId,
     String? titulo,
     String? descricao,
     DateTime? dataInicio,
@@ -306,14 +293,12 @@ class Task {
     DateTime? atualizadoEm,
     DateTime? concluidoEm,
     SyncStatus? syncStatus,
-    bool? notionSynced,
     bool? googleCalendarSynced,
   }) {
     return Task(
       id: id ?? this.id,
       userId: userId ?? this.userId,
       googleEventId: googleEventId ?? this.googleEventId,
-      notionPageId: notionPageId ?? this.notionPageId,
       titulo: titulo ?? this.titulo,
       descricao: descricao ?? this.descricao,
       dataInicio: dataInicio ?? this.dataInicio,
@@ -332,7 +317,6 @@ class Task {
       atualizadoEm: atualizadoEm ?? this.atualizadoEm,
       concluidoEm: concluidoEm ?? this.concluidoEm,
       syncStatus: syncStatus ?? this.syncStatus,
-      notionSynced: notionSynced ?? this.notionSynced,
       googleCalendarSynced: googleCalendarSynced ?? this.googleCalendarSynced,
     );
   }

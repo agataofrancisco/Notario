@@ -61,7 +61,17 @@ class _ExecutionView extends StatelessWidget {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text('Modo Foco', style: GoogleFonts.inter()),
+          title: const Text('Modo Foco'),
+          elevation: 0,
+          flexibleSpace: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+              ),
+            ),
+          ),
           leading: IconButton(
             icon: const Icon(Icons.close),
             onPressed: () async {

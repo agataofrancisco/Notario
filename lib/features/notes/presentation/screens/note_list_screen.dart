@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart';
 import '../../domain/entities/note.dart';
 import '../bloc/note_bloc.dart';
 import 'note_form_screen.dart';
+import '../widgets/note_card.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 
@@ -15,6 +15,16 @@ class NoteListScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Minhas Notas'),
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+            ),
+          ),
+        ),
       ),
       body: const NoteListView(),
       floatingActionButton: FloatingActionButton(
@@ -144,7 +154,7 @@ class _NoteListViewState extends State<NoteListView> {
                           .read<NoteBloc>()
                           .add(NoteDeleteRequested(note.id));
                     },
-                    child: _NoteCard(
+                    child: NoteCard(
                       note: note,
                       onTap: () => _navigateToForm(note),
                       onDelete: () => _confirmDelete(note),
@@ -190,119 +200,6 @@ class _NoteListViewState extends State<NoteListView> {
             child: const Text('Deletar'),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _NoteCard extends StatelessWidget {
-  final Note note;
-  final VoidCallback onTap;
-  final VoidCallback onDelete;
-
-  const _NoteCard({
-    required this.note,
-    required this.onTap,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final hasReminder = note.lembrete != null;
-    final reminderPassed =
-        hasReminder && note.lembrete!.isBefore(DateTime.now());
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      note.titulo,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  if (hasReminder)
-                    Icon(
-                      reminderPassed
-                          ? Icons.notifications_off
-                          : Icons.notifications_active,
-                      color: reminderPassed ? Colors.grey : Colors.orange,
-                      size: 20,
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-
-              // Conteúdo
-              Text(
-                note.conteudo,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[700],
-                ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 12),
-
-              // Footer
-              Row(
-                children: [
-                  // Data de criação
-                  Icon(Icons.access_time, size: 14, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Text(
-                    DateFormat('dd/MM/yyyy').format(note.criadoEm),
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
-
-                  // Lembrete
-                  if (hasReminder) ...[
-                    const SizedBox(width: 16),
-                    Icon(
-                      Icons.alarm,
-                      size: 14,
-                      color: reminderPassed ? Colors.grey : Colors.orange,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      DateFormat('dd/MM HH:mm').format(note.lembrete!),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: reminderPassed ? Colors.grey : Colors.orange,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-
-                  const Spacer(),
-
-                  // Ações
-                  IconButton(
-                    icon: const Icon(Icons.delete, size: 20),
-                    color: Colors.red,
-                    onPressed: onDelete,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
