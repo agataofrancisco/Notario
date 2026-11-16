@@ -47,8 +47,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     emit(AuthLoading());
     try {
-      final user =
-          await _authService.signInWithGoogle(clientId: event.clientId);
+      final user = await _authService.signInWithGoogle();
+      if (user == null) {
+        emit(AuthUnauthenticated());
+        return;
+      }
       emit(AuthAuthenticated(user: user));
     } catch (e) {
       emit(AuthError('Erro ao fazer login com Google: ${e.toString()}'));

@@ -33,4 +33,16 @@ class AppConfig {
 
   /// Feature flag: integração com Google Calendar (OAuth) — ativo por padrão
   static const bool enableGoogleCalendar = true;
+
+  /// Firestore is optional. Keep it off until the project has an explicit
+  /// billing decision; SQLite, Google and the progress backend keep working.
+  static const bool enableFirestoreSync = bool.fromEnvironment(
+    'ENABLE_FIRESTORE_SYNC',
+    defaultValue: false,
+  );
+
+  static const String progressBackendUrl = String.fromEnvironment(
+    'PROGRESS_BACKEND_URL',
+    defaultValue: '',
+  );
 }

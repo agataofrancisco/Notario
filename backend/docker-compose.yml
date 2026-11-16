@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: notario_progress
+      POSTGRES_USER: notario
+      POSTGRES_PASSWORD: local-development-only
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notario -d notario_progress"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  progress-api:
+    build: .
+    environment:
+      ADDR: :8080
+      DATABASE_URL: postgres://notario:local-development-only@postgres:5432/notario_progress?sslmode=disable
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:?set the Android or web OAuth client ID}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy

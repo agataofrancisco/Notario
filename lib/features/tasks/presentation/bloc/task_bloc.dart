@@ -1,8 +1,8 @@
+import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../domain/entities/task.dart';
-import '../../../../core/repositories/task_firestore_repository.dart';
-import '../../../../core/services/google_calendar_service.dart';
+import '../../data/repositories/task_repository.dart';
 import '../../../../core/services/notification_service.dart';
 
 // Events
@@ -242,20 +242,14 @@ class TaskError extends TaskState {
 
 // BLoC
 class TaskBloc extends Bloc<TaskEvent, TaskState> {
-  final TaskFirestoreRepository _repository;
-  final GoogleCalendarService _googleCalendarService;
+  final TaskRepository _repository;
   final NotificationService _notificationService;
-  final bool _enableGoogleCalendar;
 
   TaskBloc({
-    required TaskFirestoreRepository repository,
-    required GoogleCalendarService googleCalendarService,
+    required TaskRepository repository,
     required NotificationService notificationService,
-    bool enableGoogleCalendar = false,
   })  : _repository = repository,
-        _googleCalendarService = googleCalendarService,
         _notificationService = notificationService,
-        _enableGoogleCalendar = enableGoogleCalendar,
         super(TaskInitial()) {
     on<TaskLoadRequested>(_onLoadRequested);
     on<TaskDayLoadRequested>(_onDayLoadRequested);
@@ -276,12 +270,7 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
   ) async {
     emit(TaskLoading());
     try {
-      // Usar stream para atualizações em tempo real
-      await emit.forEach(
-        _repository.watchUserTasks(event.userId),
-        onData: (tasks) => TaskLoaded(tasks),
-        onError: (error, stackTrace) => TaskError(error.toString()),
-      );
+      emit(TaskLoaded(await _repository.getByUserId(event.userId)));
     } catch (e) {
       emit(TaskError('Erro ao carregar tarefas: ${e.toString()}'));
     }
@@ -293,11 +282,8 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
   ) async {
     emit(TaskLoading());
     try {
-      await emit.forEach(
-        _repository.watchDayTasks(event.userId, event.date),
-        onData: (tasks) => TaskDayLoaded(tasks, event.date),
-        onError: (error, stackTrace) => TaskError(error.toString()),
-      );
+      emit(TaskDayLoaded(
+          await _repository.getByDate(event.userId, event.date), event.date));
     } catch (e) {
       emit(TaskError('Erro ao carregar tarefas do dia: ${e.toString()}'));
     }
@@ -308,35 +294,12 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
     Emitter<TaskState> emit,
   ) async {
     try {
-      var taskToSave = event.task;
+      final taskToSave = event.task;
 
-      // 1) (Opcional) Criar evento no Google Calendar (não bloqueia o salvamento)
-      if (_enableGoogleCalendar) {
-        try {
-          final createdEvent = await _googleCalendarService.createEventFromTask(
-            title: taskToSave.titulo,
-            description: taskToSave.descricao,
-            startTime: taskToSave.dataInicio,
-            durationMinutes: taskToSave.duracaoMinutos,
-          );
-          if (createdEvent != null && createdEvent.id != null) {
-            taskToSave = taskToSave.copyWith(
-              googleEventId: createdEvent.id,
-              googleCalendarSynced: true,
-            );
-          } else {
-            // Falha silenciosa
-            taskToSave = taskToSave.copyWith(googleCalendarSynced: false);
-          }
-        } catch (_) {
-          taskToSave = taskToSave.copyWith(googleCalendarSynced: false);
-        }
-      }
-
-      // 2) Persistir no Firestore
+      // SQLite is the source of truth. Remote sync happens asynchronously.
       await _repository.create(taskToSave);
 
-      // 3) Lembrete local
+      // 2) Notificações locais
       await _notificationService.scheduleTaskReminder(
         taskId: taskToSave.id,
         title: taskToSave.titulo,
@@ -349,10 +312,8 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
         startTime: taskToSave.dataInicio,
       );
 
-      // 4) Garantir que os flags finais estão no Firestore
-      await _repository.update(taskToSave);
-
-      emit(const TaskOperationSuccess('Tarefa criada com sucesso!'));
+      emit(const TaskOperationSuccess(
+          'Tarefa guardada no dispositivo. Será sincronizada quando houver rede.'));
     } catch (e) {
       emit(TaskError('Erro ao criar tarefa: ${e.toString()}'));
     }
@@ -363,51 +324,12 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
     Emitter<TaskState> emit,
   ) async {
     try {
-      var taskToSave = event.task;
+      final taskToSave = event.task;
 
-      // 1) (Opcional) Atualizar / criar evento no Google Calendar (não bloqueia o salvamento)
-      if (_enableGoogleCalendar) {
-        try {
-          if (taskToSave.googleEventId != null &&
-              taskToSave.googleEventId!.isNotEmpty) {
-            final updatedEvent = await _googleCalendarService.updateEvent(
-              eventId: taskToSave.googleEventId!,
-              title: taskToSave.titulo,
-              description: taskToSave.descricao,
-              startTime: taskToSave.dataInicio,
-              durationMinutes: taskToSave.duracaoMinutos,
-            );
-            if (updatedEvent != null) {
-              taskToSave = taskToSave.copyWith(googleCalendarSynced: true);
-            } else {
-              taskToSave = taskToSave.copyWith(googleCalendarSynced: false);
-            }
-          } else {
-            final createdEvent =
-                await _googleCalendarService.createEventFromTask(
-              title: taskToSave.titulo,
-              description: taskToSave.descricao,
-              startTime: taskToSave.dataInicio,
-              durationMinutes: taskToSave.duracaoMinutos,
-            );
-            if (createdEvent != null && createdEvent.id != null) {
-              taskToSave = taskToSave.copyWith(
-                googleEventId: createdEvent.id,
-                googleCalendarSynced: true,
-              );
-            } else {
-              taskToSave = taskToSave.copyWith(googleCalendarSynced: false);
-            }
-          }
-        } catch (_) {
-          taskToSave = taskToSave.copyWith(googleCalendarSynced: false);
-        }
-      }
-
-      // 2) Persistir no Firestore
+      // Guardar primeiro: o Calendar é uma integração opcional.
       await _repository.update(taskToSave);
 
-      // 3) Atualizar lembrete local
+      // Atualizar lembrete local
       await _notificationService.cancelNotification(taskToSave.id);
       await _notificationService.cancelNotification('start_${taskToSave.id}');
       await _notificationService.scheduleTaskReminder(
@@ -421,7 +343,7 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
         title: taskToSave.titulo,
         startTime: taskToSave.dataInicio,
       );
-      emit(const TaskOperationSuccess('Tarefa atualizada com sucesso!'));
+      emit(const TaskOperationSuccess('Tarefa atualizada no dispositivo.'));
     } catch (e) {
       emit(TaskError('Erro ao atualizar tarefa: ${e.toString()}'));
     }
@@ -432,18 +354,6 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
     Emitter<TaskState> emit,
   ) async {
     try {
-      // Buscar tarefa para tentar remover eventId e cancelar lembrete
-      final task = await _repository.getById(event.taskId);
-      if (_enableGoogleCalendar &&
-          task?.googleEventId != null &&
-          task!.googleEventId!.isNotEmpty) {
-        try {
-          await _googleCalendarService.deleteEvent(task.googleEventId!);
-        } catch (_) {
-          // Não bloquear delete local
-        }
-      }
-
       await _notificationService.cancelNotification(event.taskId);
       await _notificationService.cancelNotification('start_${event.taskId}');
       await _repository.delete(event.taskId);

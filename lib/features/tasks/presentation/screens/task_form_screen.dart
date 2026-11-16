@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:notario/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:notario/features/auth/presentation/bloc/auth_state.dart';
 import 'package:uuid/uuid.dart';
+import '../../../../core/config/app_timezone.dart';
 import '../../domain/entities/task.dart';
 import '../bloc/task_bloc.dart';
 import '../widgets/smart_rescheduling_dialog.dart';
@@ -39,9 +40,11 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     _titleController = TextEditingController(text: widget.task?.titulo ?? '');
     _descriptionController =
         TextEditingController(text: widget.task?.descricao ?? '');
-    _startDate = widget.task?.dataInicio ?? DateTime.now();
-    _startTime =
-        TimeOfDay.fromDateTime(widget.task?.dataInicio ?? DateTime.now());
+    final existing = widget.task == null
+        ? AppTimeZone.now()
+        : AppTimeZone.inAppZone(widget.task!.dataInicio);
+    _startDate = existing;
+    _startTime = TimeOfDay.fromDateTime(existing);
     _durationMinutes = widget.task?.duracaoMinutos ?? 60;
     _priority = widget.task?.prioridade ?? Prioridade.media;
     _isNegotiable = widget.task?.isNegotiable ?? true;
@@ -89,13 +92,8 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
 
       setState(() => _isLoading = true); // Mark as loading
 
-      final finalDateTime = DateTime(
-        _startDate.year,
-        _startDate.month,
-        _startDate.day,
-        _startTime.hour,
-        _startTime.minute,
-      );
+      final finalDateTime =
+          AppTimeZone.at(_startDate, _startTime.hour, _startTime.minute);
 
       if (widget.isEditing) {
         final updatedTask = widget.task!.copyWith(
@@ -108,7 +106,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
           isNegotiable: _isNegotiable,
           safetyMarginMinutes: _safetyMarginMinutes,
           avisoAntesMinutos: _avisoAntesMinutos,
-          atualizadoEm: DateTime.now(),
+          atualizadoEm: AppTimeZone.now().toUtc(),
         );
         context.read<TaskBloc>().add(TaskUpdateRequested(updatedTask));
       } else {
@@ -124,8 +122,8 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
           isNegotiable: _isNegotiable,
           safetyMarginMinutes: _safetyMarginMinutes,
           avisoAntesMinutos: _avisoAntesMinutos,
-          criadoEm: DateTime.now(),
-          atualizadoEm: DateTime.now(),
+          criadoEm: AppTimeZone.now().toUtc(),
+          atualizadoEm: AppTimeZone.now().toUtc(),
         );
         context.read<TaskBloc>().add(TaskCreateRequested(newTask));
       }
@@ -270,7 +268,8 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                   decoration: BoxDecoration(
                     color: Colors.red.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                    border:
+                        Border.all(color: Colors.red.withValues(alpha: 0.3)),
                   ),
                   child: Text(
                     result.mensagem,

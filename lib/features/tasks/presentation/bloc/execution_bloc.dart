@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../domain/entities/task.dart';
-import '../../../../core/repositories/task_firestore_repository.dart';
+import '../../data/repositories/task_repository.dart';
 import '../../../../core/services/notification_service.dart';
 
 // Events
@@ -102,13 +102,13 @@ class ExecutionCompleted extends ExecutionState {
 
 // BLoC
 class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
-  final TaskFirestoreRepository _repository;
+  final TaskRepository _repository;
   final NotificationService _notificationService;
 
   Timer? _timer;
 
   ExecutionBloc({
-    required TaskFirestoreRepository repository,
+    required TaskRepository repository,
     required NotificationService notificationService,
   })  : _repository = repository,
         _notificationService = notificationService,

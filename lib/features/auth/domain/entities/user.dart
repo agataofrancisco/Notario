@@ -16,7 +16,7 @@ class User {
     required this.nome,
     this.fotoUrl,
     this.googleCalendarId,
-    this.timezone = 'Europe/Lisbon',
+    this.timezone = 'Africa/Luanda',
     required this.criadoEm,
     required this.atualizadoEm,
   });
@@ -29,7 +29,7 @@ class User {
       nome: json['nome'],
       fotoUrl: json['foto_url'],
       googleCalendarId: json['google_calendar_id'],
-      timezone: json['timezone'] ?? 'Europe/Lisbon',
+      timezone: json['timezone'] ?? 'Africa/Luanda',
       criadoEm: DateTime.parse(json['criado_em']),
       atualizadoEm: DateTime.parse(json['atualizado_em']),
     );
@@ -71,7 +71,7 @@ class User {
       nome: map['nome'],
       fotoUrl: map['foto_url'],
       googleCalendarId: map['google_calendar_id'],
-      timezone: map['timezone'] ?? 'Europe/Lisbon',
+      timezone: map['timezone'] ?? 'Africa/Luanda',
       criadoEm: DateTime.parse(map['criado_em']),
       atualizadoEm: DateTime.parse(map['atualizado_em']),
     );

@@ -8,8 +8,8 @@ import 'core/services/statistics_service.dart';
 import 'core/services/weekly_notification_service.dart';
 import 'core/repositories/task_firestore_repository.dart';
 
-import 'core/config/app_config.dart';
 import 'core/services/sync_service.dart';
+import 'core/services/progress_backup_service.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/auth/presentation/bloc/auth_event.dart';
 import 'features/auth/presentation/bloc/auth_state.dart';
@@ -18,6 +18,7 @@ import 'features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'features/dashboard/presentation/bloc/stats_bloc.dart';
 import 'features/tasks/presentation/bloc/task_bloc.dart';
 import 'features/tasks/data/repositories/task_repository.dart';
+import 'features/progress/data/progress_repository.dart';
 import 'shared/theme/app_theme.dart';
 import 'features/notes/presentation/bloc/note_bloc.dart';
 import 'features/notes/data/repositories/note_repository.dart';
@@ -55,7 +56,7 @@ class NotarioApp extends StatelessWidget {
       }
       if (payload.startsWith('execution:')) {
         final taskId = payload.substring('execution:'.length);
-        final repo = getItMaybeRead<TaskFirestoreRepository>(nav.context);
+        final repo = getItMaybeRead<TaskRepository>(nav.context);
         if (repo == null) {
           nav.pushNamed('/tasks');
           return;
@@ -78,7 +79,9 @@ class NotarioApp extends StatelessWidget {
           create: (context) => AuthService(),
         ),
         RepositoryProvider<GoogleCalendarService>(
-          create: (context) => GoogleCalendarService(),
+          create: (context) => GoogleCalendarService(
+            googleSignIn: context.read<AuthService>().googleSignIn,
+          ),
         ),
         RepositoryProvider<NotificationService>(
           create: (context) => NotificationService(),
@@ -95,14 +98,26 @@ class NotarioApp extends StatelessWidget {
         RepositoryProvider<NoteRepository>(
           create: (context) => NoteRepository(),
         ),
+        RepositoryProvider<ProgressRepository>(
+          create: (context) => ProgressRepository(),
+        ),
+        RepositoryProvider<ProgressBackupService>(
+          create: (context) => ProgressBackupService(
+            repository: context.read<ProgressRepository>(),
+            authService: context.read<AuthService>(),
+          ),
+        ),
         RepositoryProvider<StatisticsService>(
           create: (context) =>
               StatisticsService(context.read<TaskRepository>()),
         ),
         RepositoryProvider<SyncService>(
           create: (context) => SyncService(
-            taskRepository: context.read<TaskFirestoreRepository>(),
+            localRepository: context.read<TaskRepository>(),
+            firestoreRepository: context.read<TaskFirestoreRepository>(),
             calendarService: context.read<GoogleCalendarService>(),
+            notificationService: context.read<NotificationService>(),
+            progressBackupService: context.read<ProgressBackupService>(),
           ),
         ),
       ],
@@ -116,10 +131,8 @@ class NotarioApp extends StatelessWidget {
           ),
           BlocProvider<TaskBloc>(
             create: (context) => TaskBloc(
-              repository: context.read<TaskFirestoreRepository>(),
-              googleCalendarService: context.read<GoogleCalendarService>(),
+              repository: context.read<TaskRepository>(),
               notificationService: context.read<NotificationService>(),
-              enableGoogleCalendar: AppConfig.enableGoogleCalendar,
             ),
           ),
           BlocProvider<StatsBloc>(
@@ -161,7 +174,13 @@ class NotarioApp extends StatelessWidget {
                       .checkAndSendMissedNotifications(state.user.uid);
 
                   if (!context.mounted) return;
-                  context.read<SyncService>().startPeriodicSync();
+                  final sync = context.read<SyncService>();
+                  // Offline startup is immediate: restore notifications from
+                  // SQLite before attempting any network operation.
+                  await sync.restoreLocalNotifications(state.user.uid);
+                  if (!context.mounted) return;
+                  sync.startPeriodicSync(state.user.uid);
+                  await sync.refreshGoogleCache(state.user.uid);
                 });
 
                 return const DashboardScreen();

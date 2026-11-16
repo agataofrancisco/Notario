@@ -19,7 +19,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 4,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -31,6 +31,16 @@ class DatabaseHelper {
           'ALTER TABLE tasks ADD COLUMN is_negotiable INTEGER DEFAULT 1');
       await db.execute(
           'ALTER TABLE tasks ADD COLUMN safety_margin_minutes INTEGER DEFAULT 0');
+    }
+    if (oldVersion < 3) {
+      await db.execute("UPDATE users SET timezone = 'Africa/Luanda'");
+      await db.execute(
+          "ALTER TABLE tasks ADD COLUMN remote_type TEXT DEFAULT 'local'");
+      await db.execute(
+          'CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_remote_event ON tasks(user_id, google_event_id)');
+    }
+    if (oldVersion < 4) {
+      await _createProgressTables(db);
     }
   }
 
@@ -44,7 +54,7 @@ class DatabaseHelper {
         nome TEXT NOT NULL,
         foto_url TEXT,
         google_calendar_id TEXT,
-        timezone TEXT DEFAULT 'Europe/Lisbon',
+        timezone TEXT DEFAULT 'Africa/Luanda',
         criado_em TEXT NOT NULL,
         atualizado_em TEXT NOT NULL
       )
@@ -74,6 +84,7 @@ class DatabaseHelper {
         atualizado_em TEXT NOT NULL,
         concluido_em TEXT,
         sync_status TEXT DEFAULT 'synced',
+        remote_type TEXT DEFAULT 'local',
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
       )
     ''');
@@ -152,6 +163,26 @@ class DatabaseHelper {
 
     await db.execute('''
       CREATE INDEX idx_sync_queue_processado ON sync_queue(processado)
+    ''');
+    await _createProgressTables(db);
+  }
+
+  Future<void> _createProgressTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS progress_events (
+        operation_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        completed_at TEXT NOT NULL,
+        actual_minutes INTEGER NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'completed',
+        sync_status TEXT NOT NULL DEFAULT 'pending',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_progress_events_pending
+      ON progress_events(user_id, sync_status, created_at)
     ''');
   }
 

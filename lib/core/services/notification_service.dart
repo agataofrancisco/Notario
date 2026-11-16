@@ -1,6 +1,6 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest.dart' as tz;
+import '../config/app_timezone.dart';
 
 /// Serviço de notificações locais
 class NotificationService {
@@ -19,7 +19,7 @@ class NotificationService {
     if (_initialized) return;
 
     // Inicializar timezone
-    tz.initializeTimeZones();
+    AppTimeZone.initialize();
 
     // Configurações Android
     const androidSettings =

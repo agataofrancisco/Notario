@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../../domain/entities/task.dart';
 import '../screens/task_form_screen.dart';
 import '../screens/execution_screen.dart';
+import '../../../../core/config/app_timezone.dart';
 
 class TaskListItem extends StatelessWidget {
   final Task task;
@@ -150,7 +151,7 @@ class TaskListItem extends StatelessWidget {
                             size: 14, color: Colors.green),
                         const SizedBox(width: 4),
                         Text(
-                          'Concluída em ${DateFormat("dd/MM/yy 'às' HH:mm", 'pt_PT').format(task.concluidoEm!)}',
+                          'Concluída em ${DateFormat("dd/MM/yy 'às' HH:mm", 'pt_PT').format(AppTimeZone.inAppZone(task.concluidoEm!))}',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.green[700],
@@ -203,7 +204,7 @@ class TaskListItem extends StatelessWidget {
   }
 
   Widget _buildRelativeTimeChip(BuildContext context, DateTime startTime) {
-    final now = DateTime.now();
+    final now = AppTimeZone.now();
     final difference = startTime.difference(now);
 
     String label;

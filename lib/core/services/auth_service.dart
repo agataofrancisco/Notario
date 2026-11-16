@@ -1,53 +1,37 @@
-import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter/foundation.dart';
 import '../domain/entities/app_user.dart';
-import '../config/app_config.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: [
-      'email',
-      if (AppConfig.enableGoogleCalendar)
-        'https://www.googleapis.com/auth/calendar',
-    ],
-  );
+  static const _googleScopes = <String>[
+    'email',
+    'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/tasks.readonly',
+  ];
+  final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: _googleScopes);
 
-  // Cache para o usuário Google atual, já que não estamos usando o Firebase para persistência desse estado
-  GoogleSignInAccount? _currentGoogleUser;
+  /// Reuse the same Google session for incremental Calendar/Tasks scopes.
+  GoogleSignIn get googleSignIn => _googleSignIn;
 
-  // Expor o usuário atual (Unifica Firebase e Google)
-  AppUser? get currentUser {
-    if (_auth.currentUser != null) {
-      return AppUser.fromFirebase(_auth.currentUser!);
-    }
-    if (_currentGoogleUser != null) {
-      return AppUser.fromGoogle(_currentGoogleUser!);
-    }
-    return null;
+  /// Short-lived Google ID token used only to authenticate against the
+  /// progress backend. It is never persisted in SQLite or sent to Calendar.
+  Future<String?> googleIdToken() async {
+    final user = _googleSignIn.currentUser;
+    if (user == null) return null;
+    return (await user.authentication).idToken;
   }
 
-  // Stream de mudanças de autenticação
-  // Nota: Isso monitora apenas o Firebase Auth. Para Google Sign-In direto,
-  // gerenciamos o estado manualmente no Bloc ou via _googleSignIn.onCurrentUserChanged
+  /// Firebase is the only source of truth for an authenticated app session.
+  AppUser? get currentUser => _auth.currentUser == null
+      ? null
+      : AppUser.fromFirebase(_auth.currentUser!);
+
+  /// Stream de mudanças de autenticação da sessão Firebase.
   Stream<AppUser?> get authStateChanges {
-    return _auth.authStateChanges().map((user) {
-      if (user != null) return AppUser.fromFirebase(user);
-      if (_currentGoogleUser != null) {
-        return AppUser.fromGoogle(_currentGoogleUser!);
-      }
-      return null;
-    });
-  }
-
-  // Inicializar listeners (chamado na criação do Service se necessário)
-  void init() {
-    _googleSignIn.onCurrentUserChanged.listen((account) {
-      _currentGoogleUser = account;
-    });
-    _googleSignIn.signInSilently();
+    return _auth.authStateChanges().map(
+          (user) => user == null ? null : AppUser.fromFirebase(user),
+        );
   }
 
   // Login com Email e Senha
@@ -80,33 +64,32 @@ class AuthService {
     return AppUser.fromFirebase(_auth.currentUser!); // Reloaded user
   }
 
-  // Login com Google (Modificado para Client ID direto)
-  Future<AppUser> signInWithGoogle({String? clientId}) async {
-    // Se um clientId for fornecido, recriamos a instância do GoogleSignIn
-    if (clientId != null) {
-      _googleSignIn = GoogleSignIn(
-        clientId: clientId,
-        scopes: [
-          'email',
-          if (AppConfig.enableGoogleCalendar)
-            'https://www.googleapis.com/auth/calendar',
-        ],
+  /// Returns null when the account picker is cancelled.
+  Future<AppUser?> signInWithGoogle() async {
+    final googleUser = await _googleSignIn.signIn();
+    if (googleUser == null) return null;
+
+    final googleAuth = await googleUser.authentication;
+    if (googleAuth.idToken == null) {
+      throw FirebaseAuthException(
+        code: 'missing-google-id-token',
+        message: 'Não foi possível obter a credencial de identidade Google.',
       );
     }
 
-    try {
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-
-      if (googleUser == null) {
-        throw Exception('Login cancelado pelo usuário.');
-      }
-
-      _currentGoogleUser = googleUser;
-      return AppUser.fromGoogle(googleUser);
-    } catch (e) {
-      if (kDebugMode) print('Erro no login Google: $e');
-      rethrow;
+    final credential = GoogleAuthProvider.credential(
+      accessToken: googleAuth.accessToken,
+      idToken: googleAuth.idToken,
+    );
+    final userCredential = await _auth.signInWithCredential(credential);
+    final user = userCredential.user;
+    if (user == null) {
+      throw FirebaseAuthException(
+        code: 'google-sign-in-failed',
+        message: 'O Firebase não devolveu um utilizador autenticado.',
+      );
     }
+    return AppUser.fromFirebase(user);
   }
 
   // Reset de senha
@@ -118,6 +101,5 @@ class AuthService {
   Future<void> signOut() async {
     await _auth.signOut();
     await _googleSignIn.signOut();
-    _currentGoogleUser = null;
   }
 }

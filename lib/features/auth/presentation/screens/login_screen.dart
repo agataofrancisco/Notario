@@ -54,14 +54,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _handleGoogleSignIn() {
     setState(() => _isLoading = true);
-    // Para fluxo com Client ID direto sem Firebase Credential,
-    // o Bloc chama o Service que faz o login.
-    context.read<AuthBloc>().add(
-          const AuthGoogleLoginRequested(
-            clientId:
-                '525067357557-p65t0ap1mfjgo90ru7qep6068k7vg4fd.apps.googleusercontent.com',
-          ),
-        );
+    context.read<AuthBloc>().add(const AuthGoogleLoginRequested());
   }
 
   void _showResetPasswordDialog() {

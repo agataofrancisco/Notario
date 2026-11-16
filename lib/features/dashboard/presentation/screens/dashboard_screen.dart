@@ -12,6 +12,8 @@ import '../../../notes/presentation/screens/note_list_screen.dart';
 import '../../../notes/presentation/screens/note_form_screen.dart';
 import '../widgets/dashboard_hero.dart';
 import '../widgets/empty_state.dart';
+import '../../../../core/services/sync_service.dart';
+import '../../../../core/config/app_timezone.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -22,33 +24,69 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _currentIndex = 0;
-  DateTime _selectedDate = DateTime.now();
+  DateTime _selectedDate = AppTimeZone.now();
+  String? _googleAgendaError;
+  bool _isLoadingGoogleEvents = false;
 
   @override
   void initState() {
     super.initState();
     _loadTasksForSelectedDate();
     _loadWeeklyStats();
+    _loadGoogleEvents();
   }
 
   void _loadTasksForSelectedDate() {
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
-      context.read<TaskBloc>().add(TaskDayLoadRequested(authState.user.uid, _selectedDate));
+      context
+          .read<TaskBloc>()
+          .add(TaskDayLoadRequested(authState.user.uid, _selectedDate));
+    }
+  }
+
+  Future<void> _loadGoogleEvents() async {
+    if (_isLoadingGoogleEvents) return;
+    setState(() {
+      _isLoadingGoogleEvents = true;
+      _googleAgendaError = null;
+    });
+    try {
+      final auth = context.read<AuthBloc>().state;
+      if (auth is AuthAuthenticated) {
+        await context
+            .read<SyncService>()
+            .importGoogleDay(auth.user.uid, _selectedDate);
+        if (!mounted) return;
+        await context.read<SyncService>().syncUser(auth.user.uid);
+      }
+      if (!mounted) return;
+      _loadTasksForSelectedDate();
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _googleAgendaError = e.toString();
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isLoadingGoogleEvents = false);
     }
   }
 
   void _loadWeeklyStats() {
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
-      final weekStart = _getWeekStart(DateTime.now());
-      context.read<StatsBloc>().add(StatsLoadRequested(authState.user.uid, weekStart: weekStart));
+      final weekStart = _getWeekStart(AppTimeZone.now());
+      context
+          .read<StatsBloc>()
+          .add(StatsLoadRequested(authState.user.uid, weekStart: weekStart));
     }
   }
 
   DateTime _getWeekStart(DateTime date) {
     final weekday = date.weekday;
-    return DateTime(date.year, date.month, date.day).subtract(Duration(days: weekday - 1));
+    return DateTime(date.year, date.month, date.day)
+        .subtract(Duration(days: weekday - 1));
   }
 
   void _showDaySummary(List<Task> allTasks) {
@@ -58,7 +96,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final pending = allTasks.where((t) => t.isPendente).toList();
     showDialog(
       context: context,
-      builder: (_) => DaySummaryDialog(completedTasks: completed, skippedTasks: skipped, pendingTasks: pending),
+      builder: (_) => DaySummaryDialog(
+          completedTasks: completed,
+          skippedTasks: skipped,
+          pendingTasks: pending),
     );
   }
 
@@ -66,20 +107,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: _currentIndex == 1
-          ? AppBar(title: const Text('Minhas Notas'), elevation: 0, backgroundColor: Theme.of(context).colorScheme.primary, foregroundColor: Colors.white)
+          ? AppBar(
+              title: const Text('Minhas Notas'),
+              elevation: 0,
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white)
           : null,
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           if (_currentIndex == 0) {
-            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TaskFormScreen(task: null)));
+            Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const TaskFormScreen(task: null)));
           } else {
-            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NoteFormScreen(note: null)));
+            Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const NoteFormScreen(note: null)));
           }
         },
         elevation: 6,
         backgroundColor: const Color(0xFF667EEA),
-        child: Icon(_currentIndex == 0 ? Icons.add_task : Icons.note_add, size: 28, color: Colors.white),
+        child: Icon(_currentIndex == 0 ? Icons.add_task : Icons.note_add,
+            size: 28, color: Colors.white),
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
@@ -87,8 +135,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         selectedItemColor: const Color(0xFF667EEA),
         unselectedItemColor: Colors.grey,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Tarefas'),
-          BottomNavigationBarItem(icon: Icon(Icons.sticky_note_2_outlined), activeIcon: Icon(Icons.sticky_note_2), label: 'Notas'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.calendar_today), label: 'Tarefas'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.sticky_note_2_outlined),
+              activeIcon: Icon(Icons.sticky_note_2),
+              label: 'Notas'),
         ],
       ),
     );
@@ -107,12 +159,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
         onRefresh: () async => _loadTasksForSelectedDate(),
         child: BlocBuilder<TaskBloc, TaskState>(
           builder: (context, state) {
-            final allTasks = state is TaskDayLoaded ? state.tasks : const <Task>[];
-            final pendingTasks = allTasks.where((t) => t.estado == EstadoTarefa.pendente || t.estado == EstadoTarefa.emExecucao).toList();
-            final completedTasks = allTasks.where((t) => t.isConcluida || t.isPulada).toList();
-            final stats = _DashboardStats.fromTasks(allTasks);
+            final allTasks =
+                state is TaskDayLoaded ? state.tasks : const <Task>[];
+            final pendingTasks = allTasks
+                .where((t) =>
+                    t.estado == EstadoTarefa.pendente ||
+                    t.estado == EstadoTarefa.emExecucao)
+                .toList();
+            final completedTasks =
+                allTasks.where((t) => t.isConcluida || t.isPulada).toList();
+            final stats = _DashboardStats.fromTasks(
+              allTasks,
+            );
             final authState = context.read<AuthBloc>().state;
-            final userId = authState is AuthAuthenticated ? authState.user.uid : null;
+            final userId =
+                authState is AuthAuthenticated ? authState.user.uid : null;
+            final activityRows = <_AgendaRow>[];
+            for (final task in pendingTasks) {
+              activityRows.add(_AgendaRow(
+                time: task.dataInicio,
+                child: TaskListItem(
+                  task: task,
+                  onDelete: () => context
+                      .read<TaskBloc>()
+                      .add(TaskDeleteRequested(task.id)),
+                ),
+              ));
+            }
+            activityRows.sort((a, b) => a.time.compareTo(b.time));
 
             return CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -128,6 +202,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     onChangeDate: (date) {
                       setState(() => _selectedDate = date);
                       _loadTasksForSelectedDate();
+                      _loadGoogleEvents();
                     },
                   ),
                 ),
@@ -137,33 +212,68 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Próximas Actividades', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-                        if (completedTasks.isNotEmpty)
-                          TextButton.icon(
-                            onPressed: () => _showDaySummary(allTasks),
-                            icon: const Icon(Icons.summarize, size: 18),
-                            label: const Text('Resumo do Dia'),
-                          ),
+                        Text('Próximas Actividades',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w700)),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'Atualizar Google Calendar e Tasks',
+                              onPressed: _isLoadingGoogleEvents
+                                  ? null
+                                  : _loadGoogleEvents,
+                              icon: _isLoadingGoogleEvents
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    )
+                                  : const Icon(Icons.sync, size: 20),
+                            ),
+                            if (completedTasks.isNotEmpty)
+                              TextButton.icon(
+                                onPressed: () => _showDaySummary(allTasks),
+                                icon: const Icon(Icons.summarize, size: 18),
+                                label: const Text('Resumo do Dia'),
+                              ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
                 ),
+                if (_googleAgendaError != null)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'Google Calendar/Tasks: $_googleAgendaError',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
                 if (state is TaskLoading)
-                  const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
+                  const SliverFillRemaining(
+                      child: Center(child: CircularProgressIndicator()))
                 else if (state is TaskError)
-                  SliverFillRemaining(child: Center(child: Text('Erro: ${state.message}')))
-                else if (pendingTasks.isEmpty)
+                  SliverFillRemaining(
+                      child: Center(child: Text('Erro: ${state.message}')))
+                else if (activityRows.isEmpty)
                   const SliverFillRemaining(child: EmptyState())
                 else
                   SliverPadding(
                     padding: const EdgeInsets.only(bottom: 120),
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate(
-                        (context, index) => TaskListItem(
-                          task: pendingTasks[index],
-                          onDelete: () => context.read<TaskBloc>().add(TaskDeleteRequested(pendingTasks[index].id)),
-                        ),
-                        childCount: pendingTasks.length,
+                        (context, index) => activityRows[index].child,
+                        childCount: activityRows.length,
                       ),
                     ),
                   ),
@@ -174,6 +284,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
+}
+
+class _AgendaRow {
+  final DateTime time;
+  final Widget child;
+
+  const _AgendaRow({required this.time, required this.child});
 }
 
 class _DashboardStats {
@@ -214,13 +331,20 @@ class _DashboardStats {
     // quer saber se o dia *como um todo* está cheio (incluindo o que já fez).
     // Geralmente "Cheio" refere-se à capacidade total do dia.
     // Vamos incluir concluídas no cálculo de ocupação para refletir a carga real do dia.
-    final occupiedMinutes = tasks
+    final localOccupiedMinutes = tasks
         .where((t) =>
             !t.isCancelada && // Ignorar canceladas
             (t.estado == EstadoTarefa.pendente ||
                 t.estado == EstadoTarefa.emExecucao ||
                 t.estado == EstadoTarefa.concluida))
-        .fold<int>(0, (sum, t) => sum + t.duracaoMinutos);
+        .fold<int>(
+            0,
+            (sum, t) =>
+                sum +
+                (t.isConcluida
+                    ? (t.tempoRealMinutos ?? t.duracaoMinutos)
+                    : t.duracaoMinutos));
+    final occupiedMinutes = localOccupiedMinutes;
 
     final free =
         (totalUsefulMinutes - occupiedMinutes).clamp(0, totalUsefulMinutes);
@@ -253,4 +377,3 @@ class _DashboardStats {
     );
   }
 }
-

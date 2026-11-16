@@ -9,14 +9,9 @@ abstract class AuthEvent extends Equatable {
 
 class AuthCheckRequested extends AuthEvent {}
 
-// Login com Google (opcional)
+// Login com Google
 class AuthGoogleLoginRequested extends AuthEvent {
-  final String? clientId;
-
-  const AuthGoogleLoginRequested({this.clientId});
-
-  @override
-  List<Object?> get props => [clientId];
+  const AuthGoogleLoginRequested();
 }
 
 // Login com Email e Senha

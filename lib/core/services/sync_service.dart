@@ -1,111 +1,211 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
+import '../../features/tasks/data/repositories/task_repository.dart';
+import '../../features/tasks/domain/entities/task.dart';
 import '../repositories/task_firestore_repository.dart';
 import 'google_calendar_service.dart';
-import '../../features/tasks/domain/entities/task.dart';
-import 'package:flutter/foundation.dart';
+import 'notification_service.dart';
+import '../config/app_timezone.dart';
+import '../config/app_config.dart';
+import 'progress_backup_service.dart';
 
-/// Serviço responsável por sincronizar dados pendentes quando a conexão é restabelecida
+/// Pushes changes only after SQLite committed them; failures remain pending.
 class SyncService {
-  final TaskFirestoreRepository _taskRepository;
-  final GoogleCalendarService _calendarService;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  SyncService(
+      {required TaskRepository localRepository,
+      required TaskFirestoreRepository firestoreRepository,
+      required GoogleCalendarService calendarService,
+      required NotificationService notificationService,
+      required ProgressBackupService progressBackupService})
+      : _local = localRepository,
+        _firestore = firestoreRepository,
+        _calendar = calendarService,
+        _notifications = notificationService,
+        _progressBackup = progressBackupService;
 
+  final TaskRepository _local;
+  final TaskFirestoreRepository _firestore;
+  final GoogleCalendarService _calendar;
+  final NotificationService _notifications;
+  final ProgressBackupService _progressBackup;
   bool _isSyncing = false;
   Timer? _syncTimer;
 
-  SyncService({
-    required TaskFirestoreRepository taskRepository,
-    required GoogleCalendarService calendarService,
-  })  : _taskRepository = taskRepository,
-        _calendarService = calendarService;
-
-  /// Inicia a sincronização periódica
-  void startPeriodicSync({Duration interval = const Duration(minutes: 5)}) {
+  void startPeriodicSync(String userId,
+      {Duration interval = const Duration(minutes: 5)}) {
     _syncTimer?.cancel();
-    _syncTimer = Timer.periodic(interval, (_) => performSync());
-    // Executa uma vez no início
-    performSync();
+    _syncTimer = Timer.periodic(interval, (_) => syncUser(userId));
+    syncUser(userId);
   }
 
-  /// Para a sincronização periódica
   void stopPeriodicSync() {
     _syncTimer?.cancel();
     _syncTimer = null;
   }
 
-  /// Executa a sincronização de todos os itens pendentes
-  Future<void> performSync() async {
+  Future<void> syncUser(String userId) async {
     if (_isSyncing) return;
     _isSyncing = true;
-
     try {
-      if (kDebugMode) print('Starting background sync...');
+      for (var task in await _local.getPendingSync(userId)) {
+        var synced = task;
+        var firestoreSynced = !AppConfig.enableFirestoreSync;
+        var remoteSynced = true;
 
-      await _syncPendingTasks();
-      await _syncPendingNotes();
+        // A Firebase billing/configuration error must not prevent Calendar
+        // synchronization or compromise the local-first record.
+        if (AppConfig.enableFirestoreSync) {
+          try {
+            await _firestore.create(synced);
+            firestoreSynced = true;
+          } catch (error) {
+            firestoreSynced = false;
+            if (kDebugMode) debugPrint('Firestore sync pending: $error');
+          }
+        }
 
-      if (kDebugMode) print('Background sync completed.');
-    } catch (e) {
-      if (kDebugMode) print('Error during background sync: $e');
+        try {
+          if (synced.remoteType == 'local') {
+            final event = synced.googleEventId == null
+                ? await _calendar.createEventFromTask(
+                    title: synced.titulo,
+                    description: synced.descricao,
+                    startTime: synced.dataInicio,
+                    durationMinutes: synced.duracaoMinutos)
+                : await _calendar.updateEventFromTask(
+                    eventId: synced.googleEventId!,
+                    title: synced.titulo,
+                    description: synced.descricao,
+                    startTime: synced.dataInicio,
+                    durationMinutes: synced.duracaoMinutos);
+            if (event?.id != null) {
+              synced = synced.copyWith(
+                  googleEventId: event!.id, googleCalendarSynced: true);
+            }
+          } else if (synced.remoteType == 'google_task' &&
+              synced.isConcluida &&
+              synced.googleEventId != null) {
+            await _calendar.completeGoogleTask(synced.googleEventId!);
+          }
+        } catch (error) {
+          remoteSynced = false;
+          if (kDebugMode) debugPrint('Google sync pending: $error');
+        }
+
+        // Keep the assigned Google event ID even while Firestore is pending,
+        // otherwise every retry would create a duplicate Calendar event.
+        await _local.update(synced);
+        if (firestoreSynced && remoteSynced) {
+          await _local.markAsSynced(synced.id);
+        }
+      }
+      await _progressBackup.sync(userId);
+    } catch (error) {
+      if (kDebugMode) debugPrint('Sync pending: $error');
     } finally {
       _isSyncing = false;
     }
   }
 
-  Future<void> _syncPendingTasks() async {
-    try {
-      // Buscar tarefas com sincronização pendente no Google Calendar
-      final snapshot = await _firestore
-          .collection('tasks')
-          .where('googleCalendarSynced', isEqualTo: false)
-          .get();
-
-      final tasks =
-          snapshot.docs.map((doc) => Task.fromJson(doc.data())).toList();
-
-      for (var task in tasks) {
-        var updatedTask = task;
-        bool changed = false;
-
-        // Sync Google Calendar
-        if (task.googleEventId == null) {
-          final event = await _calendarService.createEventFromTask(
-            title: task.titulo,
-            description: task.descricao,
-            startTime: task.dataInicio,
-            durationMinutes: task.duracaoMinutos,
-          );
-          if (event != null && event.id != null) {
-            updatedTask = updatedTask.copyWith(
-                googleEventId: event.id, googleCalendarSynced: true);
-            changed = true;
-          }
-        } else {
-          final event = await _calendarService.updateEventFromTask(
-            eventId: task.googleEventId!,
-            title: task.titulo,
-            description: task.descricao,
-            startTime: task.dataInicio,
-            durationMinutes: task.duracaoMinutos,
-          );
-          if (event != null) {
-            updatedTask = updatedTask.copyWith(googleCalendarSynced: true);
-            changed = true;
-          }
-        }
-
-        if (changed) {
-          await _taskRepository.update(updatedTask);
-        }
-      }
-    } catch (e) {
-      if (kDebugMode) print('Error syncing pending tasks: $e');
+  /// Re-register OS reminders from durable records. This needs no network and
+  /// is safe at every app launch because notifications use stable IDs.
+  Future<void> restoreLocalNotifications(String userId) async {
+    for (final task in await _local.getFutureActive(userId)) {
+      await _schedule(task);
     }
   }
 
-  Future<void> _syncPendingNotes() async {
-    // Notes sync via local notifications only (no external API needed)
-    if (kDebugMode) print('Notes sync: local-only, no external API.');
+  /// Cache an offline planning window after login. Individual-day refreshes
+  /// remain available from the dashboard.
+  Future<void> refreshGoogleCache(String userId) async {
+    final now = AppTimeZone.now();
+    try {
+      await _importGoogleRange(
+        userId,
+        AppTimeZone.dayStartUtc(now.subtract(const Duration(days: 30))),
+        AppTimeZone.dayEndUtc(now.add(const Duration(days: 365))),
+      );
+    } catch (error) {
+      if (kDebugMode) debugPrint('Google cache refresh skipped: $error');
+    }
+  }
+
+  /// Imports into the same local entity consumed by focus mode/notifications.
+  Future<void> importGoogleDay(String userId, DateTime date) async {
+    await _importGoogleRange(
+      userId,
+      AppTimeZone.dayStartUtc(date),
+      AppTimeZone.dayEndUtc(date),
+    );
+  }
+
+  Future<void> _importGoogleRange(
+      String userId, DateTime startInclusive, DateTime endExclusive) async {
+    final now = AppTimeZone.now().toUtc();
+    final events =
+        await _calendar.getEventsForRange(startInclusive, endExclusive);
+    for (final event in events) {
+      if (event.id == null) continue;
+      final start = event.start?.dateTime ??
+          GoogleCalendarService.parseGoogleDate(event.start?.date);
+      final end = event.end?.dateTime ??
+          GoogleCalendarService.parseGoogleDate(event.end?.date);
+      if (start == null) continue;
+      final minutes = end?.difference(start).inMinutes ?? 30;
+      final task = Task(
+          id: const Uuid().v4(),
+          userId: userId,
+          googleEventId: event.id,
+          titulo: event.summary ?? 'Evento Google',
+          descricao: event.description,
+          dataInicio: start.toUtc(),
+          dataFim: (end ?? start.add(Duration(minutes: minutes))).toUtc(),
+          duracaoMinutos: minutes,
+          prioridade: Prioridade.media,
+          criadoEm: now,
+          atualizadoEm: now,
+          remoteType: 'google_calendar',
+          googleCalendarSynced: true);
+      await _schedule(await _local.upsertImported(task));
+    }
+    final remoteTasks =
+        await _calendar.getTasksForRange(startInclusive, endExclusive);
+    for (final remote in remoteTasks) {
+      if (remote.id == null) continue;
+      final due = DateTime.tryParse(remote.due ?? '')?.toUtc();
+      if (due == null) continue;
+      final task = Task(
+          id: const Uuid().v4(),
+          userId: userId,
+          googleEventId: remote.id,
+          titulo: remote.title ?? 'Tarefa Google',
+          descricao: remote.notes,
+          dataInicio: due,
+          dataFim: due.add(const Duration(minutes: 30)),
+          duracaoMinutos: 30,
+          prioridade: Prioridade.media,
+          criadoEm: now,
+          atualizadoEm: now,
+          remoteType: 'google_task',
+          googleCalendarSynced: true);
+      await _schedule(await _local.upsertImported(task));
+    }
+  }
+
+  Future<void> _schedule(Task task) async {
+    // A platform alarm quota or permission failure must never invalidate the
+    // SQLite cache. The record remains available and will be retried at boot.
+    try {
+      await _notifications.scheduleTaskReminder(
+          taskId: task.id,
+          title: task.titulo,
+          startTime: task.dataInicio,
+          minutesBefore: task.avisoAntesMinutos);
+      await _notifications.scheduleTaskStartNotification(
+          taskId: task.id, title: task.titulo, startTime: task.dataInicio);
+    } catch (error) {
+      if (kDebugMode) debugPrint('Notification scheduling skipped: $error');
+    }
   }
 }

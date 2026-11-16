@@ -3,8 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../domain/entities/task.dart';
 import '../bloc/execution_bloc.dart';
-import '../../../../core/repositories/task_firestore_repository.dart';
+import '../../data/repositories/task_repository.dart';
 import '../../../../core/services/notification_service.dart';
+import '../../../../core/config/app_timezone.dart';
 import '../widgets/hourglass_timer.dart';
 
 class ExecutionScreen extends StatelessWidget {
@@ -16,7 +17,7 @@ class ExecutionScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (context) => ExecutionBloc(
-        repository: context.read<TaskFirestoreRepository>(),
+        repository: context.read<TaskRepository>(),
         notificationService: NotificationService(),
       )..add(ExecutionStarted(task)),
       child: const _ExecutionView(),
@@ -136,7 +137,7 @@ class _ExecutionView extends StatelessWidget {
                   // mas aqui context é do build principal, que tem o Provider (via child do provider?).
                   // Espere... O BlocProvider está acima do _ExecutionView.
                   // Então context.read<ExecutionBloc> funciona.
-                  final now = DateTime.now();
+                  final now = AppTimeZone.now();
                   final pickedDate = await showDatePicker(
                     context: context,
                     initialDate: now.add(const Duration(days: 1)),
@@ -151,10 +152,8 @@ class _ExecutionView extends StatelessWidget {
                     );
 
                     if (pickedTime != null && context.mounted) {
-                      final newDateTime = DateTime(
-                        pickedDate.year,
-                        pickedDate.month,
-                        pickedDate.day,
+                      final newDateTime = AppTimeZone.at(
+                        pickedDate,
                         pickedTime.hour,
                         pickedTime.minute,
                       );

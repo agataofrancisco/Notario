@@ -88,6 +88,10 @@ class Task {
   final SyncStatus syncStatus;
   final bool googleCalendarSynced;
 
+  /// local, google_calendar, or google_task. Imported records stay usable
+  /// offline while preserving the remote system they originated from.
+  final String remoteType;
+
   Task({
     required this.id,
     required this.userId,
@@ -111,6 +115,7 @@ class Task {
     this.concluidoEm,
     this.syncStatus = SyncStatus.synced,
     this.googleCalendarSynced = false,
+    this.remoteType = 'local',
   });
 
   factory Task.fromJson(Map<String, dynamic> json) {
@@ -157,6 +162,7 @@ class Task {
           json['google_calendar_synced'] ??
           json['sincronizado'] ??
           false,
+      remoteType: json['remoteType'] ?? json['remote_type'] ?? 'local',
     );
   }
 
@@ -183,6 +189,7 @@ class Task {
       'atualizadoEm': atualizadoEm,
       'concluidoEm': concluidoEm,
       'googleCalendarSynced': googleCalendarSynced,
+      'remoteType': remoteType,
     };
   }
 
@@ -239,8 +246,13 @@ class Task {
           _parseDateTimeNullable(map['concluido_em'] ?? map['concluidoEm']),
       syncStatus: SyncStatus.fromJson(
           map['sync_status'] ?? map['syncStatus'] ?? 'synced'),
-      googleCalendarSynced:
-          map['googleCalendarSynced'] ?? map['google_calendar_synced'] ?? false,
+      googleCalendarSynced: (map['googleCalendarSynced'] == true) ||
+          (map['googleCalendarSynced'] == 1) ||
+          (map['google_calendar_synced'] == true) ||
+          (map['google_calendar_synced'] == 1) ||
+          (map['sincronizado'] == true) ||
+          (map['sincronizado'] == 1),
+      remoteType: map['remote_type'] ?? map['remoteType'] ?? 'local',
     );
   }
 
@@ -251,8 +263,8 @@ class Task {
       'google_event_id': googleEventId,
       'titulo': titulo,
       'descricao': descricao,
-      'data_inicio': dataInicio.toIso8601String(),
-      'data_fim': dataFim.toIso8601String(),
+      'data_inicio': dataInicio.toUtc().toIso8601String(),
+      'data_fim': dataFim.toUtc().toIso8601String(),
       'duracao_minutos': duracaoMinutos,
       'prioridade': prioridade.toJson(),
       'aviso_antes_minutos': avisoAntesMinutos,
@@ -263,11 +275,11 @@ class Task {
       'safety_margin_minutes': safetyMarginMinutes,
       'sincronizado': googleCalendarSynced ? 1 : 0,
       'versao': versao,
-      'criado_em': criadoEm.toIso8601String(),
-      'atualizado_em': atualizadoEm.toIso8601String(),
-      'concluido_em': concluidoEm?.toIso8601String(),
+      'criado_em': criadoEm.toUtc().toIso8601String(),
+      'atualizado_em': atualizadoEm.toUtc().toIso8601String(),
+      'concluido_em': concluidoEm?.toUtc().toIso8601String(),
       'sync_status': syncStatus.toJson(),
-      'googleCalendarSynced': googleCalendarSynced,
+      'remote_type': remoteType,
     };
   }
 
@@ -294,6 +306,7 @@ class Task {
     DateTime? concluidoEm,
     SyncStatus? syncStatus,
     bool? googleCalendarSynced,
+    String? remoteType,
   }) {
     return Task(
       id: id ?? this.id,
@@ -318,6 +331,7 @@ class Task {
       concluidoEm: concluidoEm ?? this.concluidoEm,
       syncStatus: syncStatus ?? this.syncStatus,
       googleCalendarSynced: googleCalendarSynced ?? this.googleCalendarSynced,
+      remoteType: remoteType ?? this.remoteType,
     );
   }
 

@@ -12,7 +12,28 @@
           "package_name": "com.example.notario"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "525067357557-13hvo3q75il4cq3ibvpqtjvv4tnkhaqb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.notario",
+            "certificate_hash": "2cc627c0f20bfca77f327a27b23bfb1508f8be71"
+          }
+        },
+        {
+          "client_id": "525067357557-q4efuj4vk9jlr9eumf179sggs5lra0i9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.notario",
+            "certificate_hash": "af39e6c2a006ec779dace1bc2c46761c5191adb5"
+          }
+        },
+        {
+          "client_id": "525067357557-p65t0ap1mfjgo90ru7qep6068k7vg4fd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAGbqYFWEEM6Ehd2w3CnrNVPLDCzkvUp9I"
@@ -20,7 +41,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+        "other_platform_oauth_client": [
+          {
+            "client_id": "525067357557-bvhei4cn4qup6qhs6pgnmbaluftva4cl.apps.googleusercontent.com",
+            "client_type": 3
+          },
+          {
+            "client_id": "525067357557-53b3h3fsbs43v9l558q73aaotgu3atls.apps.googleusercontent.com",
+            "client_type": 2,
+            "ios_info": {
+              "bundle_id": "com.notario.app"
+            }
+          }
+        ]
         }
       }
     },
@@ -31,7 +64,12 @@
           "package_name": "notario.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "525067357557-p65t0ap1mfjgo90ru7qep6068k7vg4fd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAGbqYFWEEM6Ehd2w3CnrNVPLDCzkvUp9I"
@@ -39,7 +77,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+        "other_platform_oauth_client": [
+          {
+            "client_id": "525067357557-bvhei4cn4qup6qhs6pgnmbaluftva4cl.apps.googleusercontent.com",
+            "client_type": 3
+          },
+          {
+            "client_id": "525067357557-53b3h3fsbs43v9l558q73aaotgu3atls.apps.googleusercontent.com",
+            "client_type": 2,
+            "ios_info": {
+              "bundle_id": "com.notario.app"
+            }
+          }
+        ]
         }
       }
     }

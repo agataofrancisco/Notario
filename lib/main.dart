@@ -5,10 +5,12 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'core/di/injection.dart';
 import 'core/services/notification_service.dart';
+import 'core/config/app_timezone.dart';
 import 'app.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  AppTimeZone.initialize();
 
   // Inicializar Firebase
   await Firebase.initializeApp(
