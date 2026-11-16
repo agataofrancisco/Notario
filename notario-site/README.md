@@ -33,7 +33,7 @@ git push
 2. No Netlify:
    - **Add new site** → **Import an existing project**
    - Conectar ao repositório
-   - **Base directory:** `notario-site`
+   - **Base directory:** deixe vazio
    - **Publish directory:** `notario-site`
    - Deploy!
 
@@ -42,30 +42,30 @@ git push
 Depois do deploy, você terá algo como:
 
 ```
-https://notario.netlify.app
+https://notario.tuyenecomesso.com
 ```
 
 Ou pode usar um subdomínio personalizado.
 
-## 📝 Para Configurar no Firebase
+## 📝 Para Configurar no Google Auth Platform
 
-Use estes URLs no Firebase Console:
+Em **Google Cloud Console → Google Auth Platform → Branding**, use estes URLs:
 
 - **Página inicial do aplicativo:**
 
   ```
-  https://notario.netlify.app
+  https://notario.tuyenecomesso.com/
   ```
 
 - **Link da Política de Privacidade:**
 
   ```
-  https://notario.netlify.app/privacy.html
+  https://notario.tuyenecomesso.com/privacy.html
   ```
 
 - **Link dos Termos de Serviço:**
   ```
-  https://notario.netlify.app/terms.html
+  https://notario.tuyenecomesso.com/terms.html
   ```
 
 ## ✅ Checklist
@@ -76,7 +76,7 @@ Use estes URLs no Firebase Console:
 - [x] `terms.html` (termos)
 - [ ] Fazer commit
 - [ ] Deploy no Netlify
-- [ ] Configurar no Firebase Console
+- [ ] Configurar no Google Auth Platform
 
 ## 🎨 O Site Inclui
 
