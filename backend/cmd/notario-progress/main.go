@@ -29,7 +29,7 @@ func main() {
 
 	handler := progress.NewHandler(store, progress.NewGoogleVerifier(clientID))
 	server := &http.Server{
-		Addr:              envOr("ADDR", ":8080"),
+		Addr:              listenAddr(),
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
@@ -40,9 +40,14 @@ func main() {
 	log.Fatal(server.ListenAndServe())
 }
 
-func envOr(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
+// Vercel's container runtime supplies PORT. Local Docker keeps the documented
+// default of 8080, and ADDR remains available for an explicit override.
+func listenAddr() string {
+	if address := os.Getenv("ADDR"); address != "" {
+		return address
 	}
-	return fallback
+	if port := os.Getenv("PORT"); port != "" {
+		return ":" + port
+	}
+	return ":8080"
 }
