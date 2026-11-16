@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"github.com/notario/progress-backend/internal/serverless"
+	"github.com/notario/progress-backend/serverless"
 )
 
 func Handler(w http.ResponseWriter, r *http.Request) {

@@ -1,3 +1,4 @@
+// Package serverless adapts the progress API for serverless hosts such as Vercel.
 package serverless
 
 import (
