@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/healthz", "destination": "/api/healthz" },
+    { "source": "/v1/progress/push", "destination": "/api/v1/progress/push" },
+    { "source": "/v1/progress/pull", "destination": "/api/v1/progress/pull" },
+    { "source": "/v1/account/data", "destination": "/api/v1/account/data" }
+  ]
+}

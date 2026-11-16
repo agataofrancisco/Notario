@@ -48,6 +48,27 @@ fails rather than leaking task content.
 For native execution, set `DATABASE_URL` and `GOOGLE_OAUTH_CLIENT_ID`, then
 run `go run ./cmd/notario-progress`.
 
+## Deploy on Vercel
+
+The repository includes Vercel Go Functions and rewrites, so the public API
+paths remain `/healthz` and `/v1/...` rather than exposing an `/api` prefix.
+
+1. In Vercel, import this Git repository and set **Root Directory** to
+   `backend`.
+2. In the Vercel Marketplace, add a **Neon Postgres** database to the project.
+   Copy its pooled connection string to `DATABASE_URL`. The database must use
+   TLS; do not use `sslmode=disable` outside local Docker.
+3. Add `GOOGLE_OAUTH_CLIENT_ID` with the OAuth client ID whose ID tokens the
+   mobile app sends. It is an identifier, not a secret.
+4. Deploy and confirm `GET https://<your-project>.vercel.app/healthz` returns
+   `{"status":"ok"}`.
+5. Set the Flutter build value
+   `--dart-define=PROGRESS_BACKEND_URL=https://<your-project>.vercel.app`.
+
+Vercel Postgres was retired for new projects; use a Marketplace Postgres
+provider such as Neon. No Google API key, OAuth client secret, or service
+account is needed by this service.
+
 ## OAuth requirements
 
 The API verifies a Google ID token signature, issuer, expiry, and audience.
