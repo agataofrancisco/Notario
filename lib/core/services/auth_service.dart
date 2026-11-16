@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../config/app_config.dart';
 import '../domain/entities/app_user.dart';
 
 class AuthService {
@@ -9,7 +10,10 @@ class AuthService {
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/tasks.readonly',
   ];
-  final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: _googleScopes);
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: _googleScopes,
+    serverClientId: AppConfig.googleServerClientId,
+  );
 
   /// Reuse the same Google session for incremental Calendar/Tasks scopes.
   GoogleSignIn get googleSignIn => _googleSignIn;

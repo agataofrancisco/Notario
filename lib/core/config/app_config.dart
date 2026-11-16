@@ -45,4 +45,12 @@ class AppConfig {
     'PROGRESS_BACKEND_URL',
     defaultValue: '',
   );
+
+  /// Shared OAuth audience for progress-backend ID tokens. OAuth client IDs
+  /// identify an app, but are not secrets and may safely be embedded here.
+  static const String googleServerClientId = String.fromEnvironment(
+    'GOOGLE_SERVER_CLIENT_ID',
+    defaultValue:
+        '525067357557-p65t0ap1mfjgo90ru7qep6068k7vg4fd.apps.googleusercontent.com',
+  );
 }
