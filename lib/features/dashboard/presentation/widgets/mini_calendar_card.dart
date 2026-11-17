@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../tasks/data/repositories/task_repository.dart';
 
 class MiniCalendarCard extends StatefulWidget {
   final DateTime selectedDate;
@@ -52,20 +53,19 @@ class _MiniCalendarCardState extends State<MiniCalendarCard> {
     final weekEnd = _weekStart.add(const Duration(days: 7));
 
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('tasks')
-          .where('userId', isEqualTo: widget.userId)
-          .where('dataInicio', isGreaterThanOrEqualTo: Timestamp.fromDate(_weekStart))
-          .where('dataInicio', isLessThan: Timestamp.fromDate(weekEnd))
-          .where('estado', whereIn: ['pendente', 'emExecucao', 'concluida'])
-          .get();
+      final tasks = await context.read<TaskRepository>().getByRange(
+            widget.userId!,
+            startInclusive: _weekStart,
+            endExclusive: weekEnd,
+          );
+      if (!mounted) return;
 
       final tasksByDay = <String, int>{};
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final dataInicio = (data['dataInicio'] as Timestamp).toDate();
-        final dayKey = '${dataInicio.year}-${dataInicio.month}-${dataInicio.day}';
-        final duracao = data['duracaoMinutos'] as int? ?? 0;
+      for (final task in tasks) {
+        final dataInicio = task.dataInicio.toLocal();
+        final dayKey =
+            '${dataInicio.year}-${dataInicio.month}-${dataInicio.day}';
+        final duracao = task.duracaoMinutos;
         tasksByDay[dayKey] = (tasksByDay[dayKey] ?? 0) + duracao;
       }
 
@@ -93,7 +93,8 @@ class _MiniCalendarCardState extends State<MiniCalendarCard> {
   void _navigateWeek(int direction) {
     setState(() {
       _weekStart = _weekStart.add(Duration(days: 7 * direction));
-      widget.onChangeDate(widget.selectedDate.add(Duration(days: 7 * direction)));
+      widget
+          .onChangeDate(widget.selectedDate.add(Duration(days: 7 * direction)));
     });
     _loadWeekOccupancy();
   }
@@ -110,16 +111,36 @@ class _MiniCalendarCardState extends State<MiniCalendarCard> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 18, offset: const Offset(0, 10))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 18,
+              offset: const Offset(0, 10))
+        ],
       ),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              IconButton(icon: const Icon(Icons.chevron_left), onPressed: () => _navigateWeek(-1), iconSize: 20, padding: EdgeInsets.zero, constraints: const BoxConstraints(), tooltip: 'Semana anterior'),
-              Text(DateFormat('MMM yyyy', 'pt_PT').format(_weekStart), style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
-              IconButton(icon: const Icon(Icons.chevron_right), onPressed: () => _navigateWeek(1), iconSize: 20, padding: EdgeInsets.zero, constraints: const BoxConstraints(), tooltip: 'Próxima semana'),
+              IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  onPressed: () => _navigateWeek(-1),
+                  iconSize: 20,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Semana anterior'),
+              Text(DateFormat('MMM yyyy', 'pt_PT').format(_weekStart),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade700)),
+              IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  onPressed: () => _navigateWeek(1),
+                  iconSize: 20,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Próxima semana'),
             ],
           ),
           const SizedBox(height: 8),
@@ -136,22 +157,43 @@ class _MiniCalendarCardState extends State<MiniCalendarCard> {
                 borderRadius: BorderRadius.circular(14),
                 onTap: () => widget.onChangeDate(d),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(labels[index], style: theme.textTheme.labelSmall?.copyWith(color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+                      Text(labels[index],
+                          style: theme.textTheme.labelSmall?.copyWith(
+                              color: Colors.grey.shade600,
+                              fontWeight: FontWeight.w600)),
                       const SizedBox(height: 8),
                       Container(
-                        width: 26, height: 26, alignment: Alignment.center,
+                        width: 26,
+                        height: 26,
+                        alignment: Alignment.center,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: (isSelected || isToday) ? Border.all(color: isSelected ? const Color(0xFF667EEA) : Colors.grey.shade400, width: 2) : null,
+                          border: (isSelected || isToday)
+                              ? Border.all(
+                                  color: isSelected
+                                      ? const Color(0xFF667EEA)
+                                      : Colors.grey.shade400,
+                                  width: 2)
+                              : null,
                         ),
-                        child: Text('${d.day}', style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700, color: isSelected ? Colors.black : Colors.grey.shade700)),
+                        child: Text('${d.day}',
+                            style: theme.textTheme.labelMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: isSelected
+                                    ? Colors.black
+                                    : Colors.grey.shade700)),
                       ),
                       const SizedBox(height: 8),
-                      Container(width: 8, height: 8, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)),
+                      Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                              color: dotColor, shape: BoxShape.circle)),
                     ],
                   ),
                 ),

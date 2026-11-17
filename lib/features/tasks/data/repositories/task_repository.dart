@@ -63,6 +63,27 @@ class TaskRepository {
     return maps.map((map) => Task.fromMap(map)).toList();
   }
 
+  /// Reads a planning interval from SQLite. Dashboard calendar indicators must
+  /// use this durable local source, never a Firestore query.
+  Future<List<Task>> getByRange(
+    String userId, {
+    required DateTime startInclusive,
+    required DateTime endExclusive,
+  }) async {
+    final db = await _dbHelper.database;
+    final maps = await db.query(
+      'tasks',
+      where: 'user_id = ? AND data_inicio >= ? AND data_inicio < ?',
+      whereArgs: [
+        userId,
+        startInclusive.toUtc().toIso8601String(),
+        endExclusive.toUtc().toIso8601String(),
+      ],
+      orderBy: 'data_inicio ASC',
+    );
+    return maps.map(Task.fromMap).toList();
+  }
+
   // Obter tarefas por estado
   Future<List<Task>> getByEstado(String userId, EstadoTarefa estado) async {
     final db = await _dbHelper.database;
