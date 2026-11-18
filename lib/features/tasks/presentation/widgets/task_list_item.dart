@@ -1,18 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../domain/entities/task.dart';
+import '../../domain/services/task_deadline_service.dart';
 import '../screens/task_form_screen.dart';
 import '../screens/execution_screen.dart';
 import '../../../../core/config/app_timezone.dart';
+import '../../../../shared/theme/app_theme.dart';
+import '../../../../shared/utils/plain_text.dart';
 
 class TaskListItem extends StatelessWidget {
   final Task task;
   final VoidCallback? onDelete;
+  final VoidCallback? onTaskChanged;
 
   const TaskListItem({
     super.key,
     required this.task,
     this.onDelete,
+    this.onTaskChanged,
   });
 
   @override
@@ -22,6 +27,8 @@ class TaskListItem extends StatelessWidget {
     final bool isCompleted = task.isConcluida;
     final bool isCancelled = task.isCancelada;
     final bool isDisabled = isCompleted || isCancelled;
+    final deadlineContext =
+        TaskDeadlineService.contextFor(task, AppTimeZone.now());
 
     return Dismissible(
       key: Key(task.id),
@@ -31,7 +38,7 @@ class TaskListItem extends StatelessWidget {
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         decoration: BoxDecoration(
           color: Colors.red,
           borderRadius: BorderRadius.circular(12),
@@ -44,15 +51,12 @@ class TaskListItem extends StatelessWidget {
       child: Opacity(
         opacity: isDisabled ? 0.6 : 1.0,
         child: Card(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          elevation: isDisabled ? 1 : 3,
+          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(
-                color: isDisabled
-                    ? Colors.grey.withValues(alpha: 0.3)
-                    : priorityColor.withValues(alpha: 0.7),
-                width: 1),
+            borderRadius: BorderRadius.circular(AppTheme.radiusL),
+            side:
+                BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           child: InkWell(
             onTap: isDisabled
@@ -66,7 +70,7 @@ class TaskListItem extends StatelessWidget {
                   },
             borderRadius: BorderRadius.circular(12),
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(12.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -78,17 +82,40 @@ class TaskListItem extends StatelessWidget {
                         child: Text(
                           task.titulo,
                           style:
-                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.bold,
                                     decoration: isCompleted
                                         ? TextDecoration.lineThrough
                                         : null,
-                                    color: isDisabled ? Colors.grey : null,
+                                    color: isDisabled
+                                        ? Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant
+                                        : null,
                                   ),
-                          overflow: TextOverflow.ellipsis,
+                          softWrap: true,
                         ),
                       ),
                       const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: priorityColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          switch (task.prioridade) {
+                            Prioridade.alta => 'Alta',
+                            Prioridade.media => 'Média',
+                            Prioridade.baixa => 'Baixa',
+                          },
+                          style: TextStyle(
+                              color: priorityColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ),
                       if (isCompleted)
                         Container(
                           padding: const EdgeInsets.all(8),
@@ -113,12 +140,13 @@ class TaskListItem extends StatelessWidget {
                             size: 32,
                             color: Colors.green,
                           ),
-                          onPressed: () {
-                            Navigator.of(context).push(
+                          onPressed: () async {
+                            await Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) => ExecutionScreen(task: task),
                               ),
                             );
+                            onTaskChanged?.call();
                           },
                           tooltip: 'Iniciar Execução',
                         )
@@ -126,15 +154,73 @@ class TaskListItem extends StatelessWidget {
                         Icon(statusIcon, color: Theme.of(context).primaryColor),
                     ],
                   ),
+                  if (deadlineContext != null && !isCompleted) ...[
+                    const SizedBox(height: 8),
+                    Semantics(
+                      label: 'Prazo: ${deadlineContext.label}',
+                      child: Chip(
+                        avatar: Icon(
+                          deadlineContext.urgency == DeadlineUrgency.overdue
+                              ? Icons.warning_amber_rounded
+                              : Icons.flag_outlined,
+                          size: 18,
+                        ),
+                        label: Text(deadlineContext.label),
+                        visualDensity: VisualDensity.compact,
+                        backgroundColor: deadlineContext.urgency ==
+                                DeadlineUrgency.overdue
+                            ? Theme.of(context).colorScheme.errorContainer
+                            : Theme.of(context).colorScheme.secondaryContainer,
+                      ),
+                    ),
+                  ],
+                  if (task.syncStatus == SyncStatus.pending) ...[
+                    const SizedBox(height: 6),
+                    Semantics(
+                      label:
+                          'Alteração guardada no dispositivo; sincronização pendente',
+                      child: Row(
+                        children: [
+                          Icon(Icons.sync_problem_outlined,
+                              size: 15,
+                              color: Theme.of(context).colorScheme.tertiary),
+                          const SizedBox(width: 5),
+                          Text('Sincronização pendente',
+                              style: Theme.of(context).textTheme.labelSmall),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(statusIcon,
+                          size: 16, color: _getStatusColor(task.estado)),
+                      const SizedBox(width: 6),
+                      Text(
+                        _getStatusLabel(task.estado),
+                        style:
+                            Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: _getStatusColor(task.estado),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 8),
                   if (task.descricao != null && task.descricao!.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8.0),
                       child: Text(
-                        task.descricao!,
+                        toPlainText(task.descricao),
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color:
-                                  isDisabled ? Colors.grey : Colors.grey[700],
+                              color: isDisabled
+                                  ? Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
                               decoration: isCompleted
                                   ? TextDecoration.lineThrough
                                   : null,
@@ -221,14 +307,18 @@ class TaskListItem extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.blue.shade50,
+        color: Theme.of(context)
+            .colorScheme
+            .primaryContainer
+            .withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue.shade200),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.access_time, size: 14, color: Colors.blue.shade700),
+          Icon(Icons.access_time,
+              size: 14, color: Theme.of(context).colorScheme.primary),
           const SizedBox(width: 4),
           Flexible(
             child: Text(
@@ -236,7 +326,7 @@ class TaskListItem extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: Colors.blue.shade700,
+                color: Theme.of(context).colorScheme.primary,
               ),
               overflow: TextOverflow.ellipsis,
             ),
@@ -253,7 +343,7 @@ class TaskListItem extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: isDisabled ? Colors.grey.shade100 : Colors.grey.shade200,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -261,7 +351,9 @@ class TaskListItem extends StatelessWidget {
         children: [
           Icon(icon,
               size: 14,
-              color: isDisabled ? Colors.grey.shade400 : Colors.grey.shade800),
+              color: isDisabled
+                  ? Theme.of(context).colorScheme.onSurfaceVariant
+                  : Theme.of(context).colorScheme.onSurface),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
@@ -269,8 +361,9 @@ class TaskListItem extends StatelessWidget {
               style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
-                  color:
-                      isDisabled ? Colors.grey.shade500 : Colors.grey.shade900),
+                  color: isDisabled
+                      ? Theme.of(context).colorScheme.onSurfaceVariant
+                      : Theme.of(context).colorScheme.onSurface),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -281,9 +374,29 @@ class TaskListItem extends StatelessWidget {
 
   Color _getPriorityColor(Prioridade prioridade) {
     return switch (prioridade) {
-      Prioridade.alta => Colors.red.shade400,
-      Prioridade.media => Colors.orange.shade400,
-      Prioridade.baixa => Colors.blue.shade400,
+      Prioridade.alta => AppTheme.prioridadeAlta,
+      Prioridade.media => AppTheme.prioridadeMedia,
+      Prioridade.baixa => AppTheme.prioridadeBaixa,
+    };
+  }
+
+  Color _getStatusColor(EstadoTarefa estado) {
+    return switch (estado) {
+      EstadoTarefa.pendente => AppTheme.estadoPendente,
+      EstadoTarefa.emExecucao => AppTheme.estadoEmExecucao,
+      EstadoTarefa.concluida => AppTheme.estadoConcluida,
+      EstadoTarefa.cancelada => AppTheme.estadoCancelada,
+      EstadoTarefa.pulada => AppTheme.estadoPulada,
+    };
+  }
+
+  String _getStatusLabel(EstadoTarefa estado) {
+    return switch (estado) {
+      EstadoTarefa.pendente => 'Planeada',
+      EstadoTarefa.emExecucao => 'Em execução',
+      EstadoTarefa.concluida => 'Concluída',
+      EstadoTarefa.cancelada => 'Cancelada',
+      EstadoTarefa.pulada => 'Pulada',
     };
   }
 

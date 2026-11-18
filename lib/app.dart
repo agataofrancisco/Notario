@@ -28,6 +28,7 @@ import 'features/tasks/presentation/screens/execution_screen.dart';
 
 class NotarioApp extends StatelessWidget {
   final SharedPreferences prefs;
+  final AuthService? authService;
 
   static final GlobalKey<NavigatorState> _navigatorKey =
       GlobalKey<NavigatorState>();
@@ -35,6 +36,7 @@ class NotarioApp extends StatelessWidget {
   const NotarioApp({
     super.key,
     required this.prefs,
+    this.authService,
   });
 
   @override
@@ -76,11 +78,12 @@ class NotarioApp extends StatelessWidget {
     return MultiRepositoryProvider(
       providers: [
         RepositoryProvider<AuthService>(
-          create: (context) => AuthService(),
+          create: (context) => authService ?? AuthService(),
         ),
         RepositoryProvider<GoogleCalendarService>(
           create: (context) => GoogleCalendarService(
-            googleSignIn: context.read<AuthService>().googleSignIn,
+            authService: context.read<AuthService>(),
+            preferences: prefs,
           ),
         ),
         RepositoryProvider<NotificationService>(
@@ -179,8 +182,9 @@ class NotarioApp extends StatelessWidget {
                   // SQLite before attempting any network operation.
                   await sync.restoreLocalNotifications(state.user.uid);
                   if (!context.mounted) return;
-                  sync.startPeriodicSync(state.user.uid);
                   await sync.refreshGoogleCache(state.user.uid);
+                  if (!context.mounted) return;
+                  sync.startPeriodicSync(state.user.uid);
                 });
 
                 return const DashboardScreen();

@@ -110,12 +110,7 @@ class NoteBloc extends Bloc<NoteEvent, NoteState> {
   ) async {
     emit(NoteLoading());
     try {
-      await emit.forEach(
-        _repository.watchUserNotes(event.userId),
-        onData: (notes) => NoteLoaded(notes),
-        onError: (error, stackTrace) =>
-            NoteError('Erro ao carregar notas: ${error.toString()}'),
-      );
+      emit(NoteLoaded(await _repository.getByUserId(event.userId)));
     } catch (e) {
       emit(NoteError('Erro ao carregar notas: ${e.toString()}'));
     }

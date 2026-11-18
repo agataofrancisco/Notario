@@ -5,6 +5,7 @@ import 'package:notario/features/auth/presentation/bloc/auth_state.dart';
 import '../bloc/task_bloc.dart';
 import '../widgets/task_list_item.dart';
 import './task_form_screen.dart';
+import '../../../../shared/widgets/app_components.dart';
 
 class TaskListScreen extends StatefulWidget {
   const TaskListScreen({super.key});
@@ -30,30 +31,20 @@ class _TaskListScreenState extends State<TaskListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Minhas Tarefas'),
-        centerTitle: true,
+        centerTitle: false,
         elevation: 0,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
-            ),
-          ),
-        ),
+        scrolledUnderElevation: 0,
       ),
       body: BlocConsumer<TaskBloc, TaskState>(
         listener: (context, state) {
           // Mostra um snackbar em caso de erro ou sucesso na operação
           if (state is TaskError) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                  content: Text(state.message), backgroundColor: Colors.red),
+              SnackBar(content: Text(state.message)),
             );
           } else if (state is TaskOperationSuccess) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                  content: Text(state.message), backgroundColor: Colors.green),
+              SnackBar(content: Text(state.message)),
             );
             // Recarrega a lista após uma operação bem-sucedida
             final authState = context.read<AuthBloc>().state;
@@ -68,34 +59,65 @@ class _TaskListScreenState extends State<TaskListScreen> {
           if (state is TaskLoading || state is TaskInitial) {
             return const Center(child: CircularProgressIndicator());
           }
+          if (state is TaskError) {
+            return AppFeedbackState(
+              icon: Icons.cloud_off_outlined,
+              title: 'Não foi possível carregar tarefas',
+              message: state.message,
+              actionLabel: 'Tentar novamente',
+              isError: true,
+              onAction: () {
+                final auth = context.read<AuthBloc>().state;
+                if (auth is AuthAuthenticated) {
+                  context
+                      .read<TaskBloc>()
+                      .add(TaskLoadRequested(auth.user.uid));
+                }
+              },
+            );
+          }
           if (state is TaskLoaded) {
             if (state.tasks.isEmpty) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text(
-                    'Nenhuma tarefa encontrada. Toque no botão + para criar uma nova!',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
-                ),
+              return const AppFeedbackState(
+                icon: Icons.checklist_outlined,
+                title: 'Ainda não há tarefas',
+                message:
+                    'Use “Nova Tarefa” para começar a organizar o seu dia.',
               );
             }
+            final sortedTasks = [...state.tasks]..sort((a, b) {
+                final completionOrder =
+                    (a.isConcluida ? 1 : 0).compareTo(b.isConcluida ? 1 : 0);
+                return completionOrder != 0
+                    ? completionOrder
+                    : a.dataInicio.compareTo(b.dataInicio);
+              });
             // Usa o novo widget TaskCard
-            return ListView.separated(
-              padding: const EdgeInsets.fromLTRB(
-                  16, 16, 16, 80), // Padding para o FAB
-              itemCount: state.tasks.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final task = state.tasks[index];
-                return TaskListItem(
-                  task: task,
-                  onDelete: () {
-                    context.read<TaskBloc>().add(TaskDeleteRequested(task.id));
-                  },
-                );
-              },
+            return AppContentFrame(
+              child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+                itemCount: sortedTasks.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final task = sortedTasks[index];
+                  return TaskListItem(
+                    task: task,
+                    onTaskChanged: () {
+                      final auth = context.read<AuthBloc>().state;
+                      if (auth is AuthAuthenticated) {
+                        context
+                            .read<TaskBloc>()
+                            .add(TaskLoadRequested(auth.user.uid));
+                      }
+                    },
+                    onDelete: () {
+                      context
+                          .read<TaskBloc>()
+                          .add(TaskDeleteRequested(task.id));
+                    },
+                  );
+                },
+              ),
             );
           }
           // Caso o estado não seja TaskLoaded, mas também não seja loading/initial

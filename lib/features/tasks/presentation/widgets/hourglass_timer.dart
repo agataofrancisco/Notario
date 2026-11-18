@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
 
-class HourglassTimer extends StatefulWidget {
+class HourglassTimer extends StatelessWidget {
   final double progress; // 0.0 to 1.0 (1.0 = finished)
   final double size;
   final Color color;
@@ -14,45 +13,13 @@ class HourglassTimer extends StatefulWidget {
   });
 
   @override
-  State<HourglassTimer> createState() => _HourglassTimerState();
-}
-
-class _HourglassTimerState extends State<HourglassTimer>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return CustomPaint(
-          size: Size(widget.size, widget.size),
-          painter: _HourglassPainter(
-            progress: widget.progress,
-            color: widget.color,
-            rotation: _controller.value *
-                2 *
-                math.pi, // Rotate mostly just for effect or separate animation
-            sandFlow: _controller.value,
-          ),
-        );
-      },
+    return CustomPaint(
+      size: Size(size, size),
+      painter: _HourglassPainter(
+        progress: progress,
+        color: color,
+      ),
     );
   }
 }
@@ -60,14 +27,9 @@ class _HourglassTimerState extends State<HourglassTimer>
 class _HourglassPainter extends CustomPainter {
   final double progress; // 0.0 -> 1.0 (Emptying top, filling bottom)
   final Color color;
-  final double rotation;
-  final double sandFlow;
-
   _HourglassPainter({
     required this.progress,
     required this.color,
-    required this.rotation,
-    required this.sandFlow,
   });
 
   @override
@@ -140,6 +102,6 @@ class _HourglassPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _HourglassPainter oldDelegate) {
-    return oldDelegate.progress != progress || oldDelegate.sandFlow != sandFlow;
+    return oldDelegate.progress != progress || oldDelegate.color != color;
   }
 }

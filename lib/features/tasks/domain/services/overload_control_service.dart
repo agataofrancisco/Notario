@@ -1,4 +1,5 @@
 import '../../domain/entities/task.dart';
+import '../../../../core/config/app_timezone.dart';
 
 class OverloadControlService {
   /// Verifica se é possível adicionar uma nova tarefa ao dia
@@ -28,8 +29,8 @@ class OverloadControlService {
     int totalMinutes = tasks.fold(0, (sum, t) => sum + t.duracaoMinutos);
     if (totalMinutes + durationMinutes > 12 * 60) {
       // Dia cheio, sugere amanhã
-      return DateTime(
-          proposedStart.year, proposedStart.month, proposedStart.day + 1, 9, 0);
+      final localStart = AppTimeZone.inAppZone(proposedStart);
+      return AppTimeZone.at(localStart.add(const Duration(days: 1)), 9, 0);
     }
 
     return null; // Disponível
@@ -42,7 +43,7 @@ class OverloadControlService {
 
   static DateTime _findNextSlot(List<Task> tasks, int durationMinutes) {
     // Começa a procurar a partir do fim da última tarefa ou agora
-    DateTime candidateStart = DateTime.now();
+    DateTime candidateStart = AppTimeZone.now();
     if (tasks.isNotEmpty) {
       // Tenta encaixar nos buracos
       for (int i = 0; i < tasks.length - 1; i++) {
@@ -51,19 +52,19 @@ class OverloadControlService {
 
         if (nextStart.difference(currentEnd).inMinutes >= durationMinutes) {
           // Encontrou um buraco!
-          return currentEnd
+          return AppTimeZone.inAppZone(currentEnd)
               .add(const Duration(minutes: 5)); // +5 min de intervalo
         }
       }
 
       // Se não, sugere após a última tarefa
-      candidateStart = tasks.last.dataFim.add(const Duration(minutes: 15));
+      candidateStart = AppTimeZone.inAppZone(tasks.last.dataFim)
+          .add(const Duration(minutes: 15));
     }
 
     // Não permitir agendamento muito tarde (ex: após 22h)
     if (candidateStart.hour >= 22) {
-      return DateTime(candidateStart.year, candidateStart.month,
-          candidateStart.day + 1, 9, 0);
+      return AppTimeZone.at(candidateStart.add(const Duration(days: 1)), 9, 0);
     }
 
     return candidateStart;

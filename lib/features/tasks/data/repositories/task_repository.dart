@@ -1,10 +1,17 @@
 import '../../../tasks/domain/entities/task.dart';
 import '../../../../core/database/database_helper.dart';
 import '../../../../core/config/app_timezone.dart';
+import '../../../../core/config/app_config.dart';
 import '../../../progress/data/progress_repository.dart';
+import 'package:sqflite/sqflite.dart';
+import 'dart:convert';
+import 'package:uuid/uuid.dart';
 
 class TaskRepository {
-  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
+  TaskRepository({DatabaseHelper? databaseHelper})
+      : _dbHelper = databaseHelper ?? DatabaseHelper.instance;
+
+  final DatabaseHelper _dbHelper;
 
   // Criar tarefa
   Future<Task> create(Task task) async {
@@ -127,10 +134,64 @@ class TaskRepository {
   // Deletar tarefa
   Future<void> delete(String id) async {
     final db = await _dbHelper.database;
-    await db.delete(
-      'tasks',
+    await db.transaction((txn) async {
+      final rows = await txn.query(
+        'tasks',
+        columns: ['user_id', 'google_event_id', 'remote_type'],
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      if (rows.isNotEmpty) {
+        final row = rows.first;
+        final remoteEventId = row['google_event_id'] as String?;
+        final remoteType = row['remote_type'] as String? ?? 'local';
+        if (remoteType == 'local' && remoteEventId != null) {
+          final userId = row['user_id']! as String;
+          await txn.insert('sync_queue', {
+            'id': const Uuid().v4(),
+            'user_id': userId,
+            'entidade_tipo': 'google_calendar_event',
+            'entidade_id': id,
+            'operacao': 'delete',
+            'payload': jsonEncode({'googleEventId': remoteEventId}),
+            'processado': 0,
+            'tentativas': 0,
+            'criado_em': AppTimeZone.now().toUtc().toIso8601String(),
+          });
+        }
+      }
+      await txn.delete('focus_sessions', where: 'task_id = ?', whereArgs: [id]);
+      await txn.delete('tasks', where: 'id = ?', whereArgs: [id]);
+    });
+  }
+
+  Future<List<Map<String, Object?>>> getPendingCalendarDeletes(
+      String userId) async {
+    final db = await _dbHelper.database;
+    return db.query(
+      'sync_queue',
+      where:
+          'user_id = ? AND entidade_tipo = ? AND operacao = ? AND processado = 0',
+      whereArgs: [userId, 'google_calendar_event', 'delete'],
+      orderBy: 'criado_em ASC',
+    );
+  }
+
+  Future<void> markCalendarDeleteProcessed(String queueId) async {
+    final db = await _dbHelper.database;
+    await db.update(
+      'sync_queue',
+      {'processado': 1, 'erro': null},
       where: 'id = ?',
-      whereArgs: [id],
+      whereArgs: [queueId],
+    );
+  }
+
+  Future<void> recordCalendarDeleteFailure(String queueId, Object error) async {
+    final db = await _dbHelper.database;
+    await db.rawUpdate(
+      'UPDATE sync_queue SET tentativas = tentativas + 1, erro = ? WHERE id = ?',
+      [error.toString(), queueId],
     );
   }
 
@@ -160,8 +221,12 @@ class TaskRepository {
     final existing = imported.googleEventId == null
         ? <Map<String, Object?>>[]
         : await db.query('tasks',
-            where: 'user_id = ? AND google_event_id = ?',
-            whereArgs: [imported.userId, imported.googleEventId]);
+            where: 'user_id = ? AND google_event_id = ? AND remote_type = ?',
+            whereArgs: [
+                imported.userId,
+                imported.googleEventId,
+                imported.remoteType
+              ]);
     if (existing.isEmpty) {
       await db.insert('tasks', imported.toMap());
       return imported;
@@ -280,6 +345,66 @@ class TaskRepository {
     );
   }
 
+  /// Start or recover a focus timer. The persisted UTC anchor lets elapsed
+  /// time survive app suspension and process death without ticking in memory.
+  Future<int> startFocusSession(String taskId) async {
+    final db = await _dbHelper.database;
+    final now = AppTimeZone.now().toUtc();
+    final rows = await db.query('focus_sessions',
+        where: 'task_id = ?', whereArgs: [taskId], limit: 1);
+    if (rows.isEmpty) {
+      await db.insert('focus_sessions', {
+        'task_id': taskId,
+        'elapsed_seconds': 0,
+        'running_since_utc': now.toIso8601String(),
+        'updated_at_utc': now.toIso8601String(),
+      });
+      return 0;
+    }
+    final row = rows.first;
+    final elapsed = (row['elapsed_seconds'] as int?) ?? 0;
+    final runningSince =
+        DateTime.tryParse(row['running_since_utc'] as String? ?? '');
+    final currentElapsed = elapsed +
+        (runningSince == null
+            ? 0
+            : now
+                .difference(runningSince.toUtc())
+                .inSeconds
+                .clamp(0, 1 << 30)
+                .toInt());
+    await db.update(
+        'focus_sessions',
+        {
+          'elapsed_seconds': currentElapsed,
+          'running_since_utc': now.toIso8601String(),
+          'updated_at_utc': now.toIso8601String(),
+        },
+        where: 'task_id = ?',
+        whereArgs: [taskId]);
+    return currentElapsed;
+  }
+
+  Future<void> pauseFocusSession(String taskId, int elapsedSeconds) async {
+    final db = await _dbHelper.database;
+    final now = AppTimeZone.now().toUtc();
+    await db.insert(
+        'focus_sessions',
+        {
+          'task_id': taskId,
+          'elapsed_seconds': elapsedSeconds,
+          'running_since_utc': null,
+          'updated_at_utc': now.toIso8601String(),
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> clearFocusSession(String taskId) async {
+    final db = await _dbHelper.database;
+    await db
+        .delete('focus_sessions', where: 'task_id = ?', whereArgs: [taskId]);
+  }
+
   // Concluir tarefa
   Future<void> completeTask(String id, int tempoRealMinutos) async {
     final db = await _dbHelper.database;
@@ -308,6 +433,7 @@ class TaskRepository {
         completedAt: completedAt,
       );
     }
+    await clearFocusSession(id);
   }
 
   // Pular tarefa
@@ -323,6 +449,7 @@ class TaskRepository {
       where: 'id = ?',
       whereArgs: [id],
     );
+    await clearFocusSession(id);
   }
 
   // Cancelar tarefa
@@ -338,6 +465,7 @@ class TaskRepository {
       where: 'id = ?',
       whereArgs: [id],
     );
+    await clearFocusSession(id);
   }
 
   // Reagendar tarefa
@@ -358,6 +486,7 @@ class TaskRepository {
         where: 'id = ?',
         whereArgs: [id],
       );
+      await clearFocusSession(id);
     }
   }
 
@@ -368,7 +497,7 @@ class TaskRepository {
     required String userId,
     String? taskIdToExclude,
   }) async {
-    const capacity = 960;
+    const capacity = AppConfig.workMinutesPerDay;
     final tasks = (await getByDate(userId, data))
         .where((task) => task.id != taskIdToExclude && !task.isCancelada)
         .toList();

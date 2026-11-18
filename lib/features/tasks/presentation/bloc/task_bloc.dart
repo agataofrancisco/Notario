@@ -1,9 +1,15 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../domain/entities/task.dart';
 import '../../data/repositories/task_repository.dart';
 import '../../../../core/services/notification_service.dart';
+import '../../../../core/config/app_timezone.dart';
+import '../../domain/services/task_deadline_service.dart';
+
+EventTransformer<E> _sequential<E>() =>
+    (events, mapper) => events.asyncExpand(mapper);
 
 // Events
 abstract class TaskEvent extends Equatable {
@@ -157,11 +163,12 @@ class TaskLoaded extends TaskState {
 class TaskDayLoaded extends TaskState {
   final List<Task> tasks;
   final DateTime date;
+  final DailyGuidance guidance;
 
-  const TaskDayLoaded(this.tasks, this.date);
+  const TaskDayLoaded(this.tasks, this.date, this.guidance);
 
   @override
-  List<Object?> get props => [tasks, date];
+  List<Object?> get props => [tasks, date, guidance];
 }
 
 class TaskOperationSuccess extends TaskState {
@@ -244,6 +251,8 @@ class TaskError extends TaskState {
 class TaskBloc extends Bloc<TaskEvent, TaskState> {
   final TaskRepository _repository;
   final NotificationService _notificationService;
+  final DeadlineGuidanceService _guidanceService =
+      const DeadlineGuidanceService();
 
   TaskBloc({
     required TaskRepository repository,
@@ -251,17 +260,43 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
   })  : _repository = repository,
         _notificationService = notificationService,
         super(TaskInitial()) {
-    on<TaskLoadRequested>(_onLoadRequested);
-    on<TaskDayLoadRequested>(_onDayLoadRequested);
-    on<TaskCreateRequested>(_onCreateRequested);
-    on<TaskUpdateRequested>(_onUpdateRequested);
-    on<TaskDeleteRequested>(_onDeleteRequested);
-    on<TaskStartRequested>(_onStartRequested);
-    on<TaskCompleteRequested>(_onCompleteRequested);
-    on<TaskSkipRequested>(_onSkipRequested);
-    on<TaskValidateDayRequested>(_onValidateDayRequested);
-    on<TaskExecuteReschedulingRequested>(_onExecuteReschedulingRequested);
-    on<TaskWeeklyStatsRequested>(_onWeeklyStatsRequested);
+    on<TaskEvent>(_onTaskEvent, transformer: _sequential());
+  }
+
+  Future<void> _onTaskEvent(TaskEvent event, Emitter<TaskState> emit) async {
+    if (event is TaskLoadRequested) {
+      return _onLoadRequested(event, emit);
+    }
+    if (event is TaskDayLoadRequested) {
+      return _onDayLoadRequested(event, emit);
+    }
+    if (event is TaskCreateRequested) {
+      return _onCreateRequested(event, emit);
+    }
+    if (event is TaskUpdateRequested) {
+      return _onUpdateRequested(event, emit);
+    }
+    if (event is TaskDeleteRequested) {
+      return _onDeleteRequested(event, emit);
+    }
+    if (event is TaskStartRequested) {
+      return _onStartRequested(event, emit);
+    }
+    if (event is TaskCompleteRequested) {
+      return _onCompleteRequested(event, emit);
+    }
+    if (event is TaskSkipRequested) {
+      return _onSkipRequested(event, emit);
+    }
+    if (event is TaskValidateDayRequested) {
+      return _onValidateDayRequested(event, emit);
+    }
+    if (event is TaskExecuteReschedulingRequested) {
+      return _onExecuteReschedulingRequested(event, emit);
+    }
+    if (event is TaskWeeklyStatsRequested) {
+      return _onWeeklyStatsRequested(event, emit);
+    }
   }
 
   Future<void> _onLoadRequested(
@@ -282,8 +317,13 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
   ) async {
     emit(TaskLoading());
     try {
-      emit(TaskDayLoaded(
-          await _repository.getByDate(event.userId, event.date), event.date));
+      final dayTasks = await _repository.getByDate(event.userId, event.date);
+      final userTasks = await _repository.getByUserId(event.userId);
+      final guidance = _guidanceService.evaluate(
+        now: AppTimeZone.now(),
+        tasks: userTasks,
+      );
+      emit(TaskDayLoaded(dayTasks, event.date, guidance));
     } catch (e) {
       emit(TaskError('Erro ao carregar tarefas do dia: ${e.toString()}'));
     }
@@ -299,18 +339,9 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
       // SQLite is the source of truth. Remote sync happens asynchronously.
       await _repository.create(taskToSave);
 
-      // 2) Notificações locais
-      await _notificationService.scheduleTaskReminder(
-        taskId: taskToSave.id,
-        title: taskToSave.titulo,
-        startTime: taskToSave.dataInicio,
-        minutesBefore: taskToSave.avisoAntesMinutos,
-      );
-      await _notificationService.scheduleTaskStartNotification(
-        taskId: taskToSave.id,
-        title: taskToSave.titulo,
-        startTime: taskToSave.dataInicio,
-      );
+      // Notification permission/alarm failures must not turn a committed
+      // local task into an apparent create failure.
+      await _scheduleNotifications(taskToSave);
 
       emit(const TaskOperationSuccess(
           'Tarefa guardada no dispositivo. Será sincronizada quando houver rede.'));
@@ -329,20 +360,8 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
       // Guardar primeiro: o Calendar é uma integração opcional.
       await _repository.update(taskToSave);
 
-      // Atualizar lembrete local
-      await _notificationService.cancelNotification(taskToSave.id);
-      await _notificationService.cancelNotification('start_${taskToSave.id}');
-      await _notificationService.scheduleTaskReminder(
-        taskId: taskToSave.id,
-        title: taskToSave.titulo,
-        startTime: taskToSave.dataInicio,
-        minutesBefore: taskToSave.avisoAntesMinutos,
-      );
-      await _notificationService.scheduleTaskStartNotification(
-        taskId: taskToSave.id,
-        title: taskToSave.titulo,
-        startTime: taskToSave.dataInicio,
-      );
+      await _cancelNotifications(taskToSave.id);
+      await _scheduleNotifications(taskToSave);
       emit(const TaskOperationSuccess('Tarefa atualizada no dispositivo.'));
     } catch (e) {
       emit(TaskError('Erro ao atualizar tarefa: ${e.toString()}'));
@@ -354,12 +373,44 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
     Emitter<TaskState> emit,
   ) async {
     try {
-      await _notificationService.cancelNotification(event.taskId);
-      await _notificationService.cancelNotification('start_${event.taskId}');
       await _repository.delete(event.taskId);
+      await _cancelNotifications(event.taskId);
       emit(const TaskOperationSuccess('Tarefa eliminada com sucesso!'));
     } catch (e) {
       emit(TaskError('Erro ao eliminar tarefa: ${e.toString()}'));
+    }
+  }
+
+  Future<void> _scheduleNotifications(Task task) async {
+    try {
+      await _notificationService.scheduleTaskReminder(
+        taskId: task.id,
+        title: task.titulo,
+        startTime: task.dataInicio,
+        minutesBefore: task.avisoAntesMinutos,
+      );
+      await _notificationService.scheduleTaskStartNotification(
+        taskId: task.id,
+        title: task.titulo,
+        startTime: task.dataInicio,
+      );
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('Notification schedule deferred for ${task.id}: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+    }
+  }
+
+  Future<void> _cancelNotifications(String taskId) async {
+    try {
+      await _notificationService.cancelNotification(taskId);
+      await _notificationService.cancelNotification('start_$taskId');
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('Notification cancellation skipped for $taskId: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
     }
   }
 

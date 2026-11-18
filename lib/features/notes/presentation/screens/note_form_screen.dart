@@ -5,6 +5,7 @@ import '../../domain/entities/note.dart';
 import '../bloc/note_bloc.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
+import '../../../../shared/utils/plain_text.dart';
 
 class NoteFormScreen extends StatefulWidget {
   final Note? note;
@@ -28,7 +29,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     super.initState();
     if (widget.note != null) {
       _tituloController.text = widget.note!.titulo;
-      _conteudoController.text = widget.note!.conteudo;
+      _conteudoController.text = toPlainText(widget.note!.conteudo);
       _lembrete = widget.note!.lembrete;
     }
   }
@@ -111,15 +112,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       appBar: AppBar(
         title: Text(isEditing ? 'Editar Nota' : 'Nova Nota'),
         elevation: 0,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
-            ),
-          ),
-        ),
+        scrolledUnderElevation: 0,
       ),
       body: BlocListener<NoteBloc, NoteState>(
         listener: (context, state) {
@@ -140,98 +133,104 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
           }
         },
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Título
-                TextFormField(
-                  controller: _tituloController,
-                  decoration: const InputDecoration(
-                    labelText: 'Título *',
-                    hintText: 'Ex: Comprar mantimentos',
-                    prefixIcon: Icon(Icons.title),
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Digite um título';
-                    }
-                    return null;
-                  },
-                  textCapitalization: TextCapitalization.sentences,
-                ),
-                const SizedBox(height: 16),
-
-                // Conteúdo
-                TextFormField(
-                  controller: _conteudoController,
-                  decoration: const InputDecoration(
-                    labelText: 'Conteúdo *',
-                    hintText: 'Escreva sua nota aqui...',
-                    prefixIcon: Icon(Icons.notes),
-                    border: OutlineInputBorder(),
-                  ),
-                  maxLines: 8,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Digite o conteúdo da nota';
-                    }
-                    return null;
-                  },
-                  textCapitalization: TextCapitalization.sentences,
-                ),
-                const SizedBox(height: 24),
-
-                // Lembrete
-                Card(
-                  child: ListTile(
-                    leading: Icon(
-                      Icons.notifications,
-                      color: _lembrete != null
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Título
+                    TextFormField(
+                      controller: _tituloController,
+                      decoration: const InputDecoration(
+                        labelText: 'Título *',
+                        hintText: 'Ex: Comprar mantimentos',
+                        prefixIcon: Icon(Icons.title),
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Digite um título';
+                        }
+                        return null;
+                      },
+                      textCapitalization: TextCapitalization.sentences,
                     ),
-                    title: Text(
-                      _lembrete != null
-                          ? 'Lembrete: ${DateFormat('dd/MM/yyyy HH:mm').format(_lembrete!)}'
-                          : 'Adicionar lembrete',
-                    ),
-                    subtitle: _lembrete != null
-                        ? Text(_getRelativeTime(_lembrete!))
-                        : const Text('Receba uma notificação'),
-                    trailing: _lembrete != null
-                        ? IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: () => setState(() => _lembrete = null),
-                          )
-                        : const Icon(Icons.chevron_right),
-                    onTap: _selectReminder,
-                  ),
-                ),
-                const SizedBox(height: 24),
+                    const SizedBox(height: 16),
 
-                // Botão Salvar
-                ElevatedButton.icon(
-                  onPressed: _isLoading ? null : _saveNote,
-                  icon: _isLoading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Icon(isEditing ? Icons.save : Icons.add),
-                  label: Text(
-                    isEditing ? 'Salvar Alterações' : 'Criar Nota',
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
+                    // Conteúdo
+                    TextFormField(
+                      controller: _conteudoController,
+                      decoration: const InputDecoration(
+                        labelText: 'Conteúdo *',
+                        hintText: 'Escreva sua nota aqui...',
+                        prefixIcon: Icon(Icons.notes),
+                        border: OutlineInputBorder(),
+                      ),
+                      maxLines: 8,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Digite o conteúdo da nota';
+                        }
+                        return null;
+                      },
+                      textCapitalization: TextCapitalization.sentences,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Lembrete
+                    Card(
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.notifications,
+                          color: _lembrete != null
+                              ? Theme.of(context).colorScheme.primary
+                              : null,
+                        ),
+                        title: Text(
+                          _lembrete != null
+                              ? 'Lembrete: ${DateFormat('dd/MM/yyyy HH:mm').format(_lembrete!)}'
+                              : 'Adicionar lembrete',
+                        ),
+                        subtitle: _lembrete != null
+                            ? Text(_getRelativeTime(_lembrete!))
+                            : const Text('Receba uma notificação'),
+                        trailing: _lembrete != null
+                            ? IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: () =>
+                                    setState(() => _lembrete = null),
+                              )
+                            : const Icon(Icons.chevron_right),
+                        onTap: _selectReminder,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Botão Salvar
+                    ElevatedButton.icon(
+                      onPressed: _isLoading ? null : _saveNote,
+                      icon: _isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(isEditing ? Icons.save : Icons.add),
+                      label: Text(
+                        isEditing ? 'Salvar Alterações' : 'Criar Nota',
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),

@@ -4,32 +4,103 @@ import 'package:googleapis_auth/auth_io.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_timezone.dart';
+import 'auth_service.dart';
+import 'google_task_time_mapper.dart';
+
+enum GoogleCalendarFailure {
+  disconnected,
+  permissionDenied,
+  reauthorizationRequired,
+  remote
+}
+
+class GoogleCalendarException implements Exception {
+  final GoogleCalendarFailure failure;
+  final String message;
+
+  const GoogleCalendarException(this.failure, this.message);
+
+  @override
+  String toString() => message;
+}
 
 /// Serviço para integração com Google Calendar
 class GoogleCalendarService {
-  static const _calendarScopes = <String>[
-    'https://www.googleapis.com/auth/calendar.readonly',
-    'https://www.googleapis.com/auth/tasks.readonly',
-  ];
-  static const _writeScopes = <String>[
-    'https://www.googleapis.com/auth/calendar.events',
-    'https://www.googleapis.com/auth/tasks',
-  ];
+  static const connectionPreferenceKey = 'google_calendar_connected_v1';
+  static const _calendarScopes = AuthService.calendarScopes;
   static const _requestTimeout = Duration(seconds: 20);
 
-  GoogleCalendarService({required GoogleSignIn googleSignIn})
-      : _googleSignIn = googleSignIn;
+  GoogleCalendarService({
+    required AuthService authService,
+    required SharedPreferences preferences,
+  })  : _authService = authService,
+        _googleSignIn = authService.googleSignIn,
+        _preferences = preferences;
 
+  final AuthService _authService;
   final GoogleSignIn _googleSignIn;
+  final SharedPreferences _preferences;
 
   calendar.CalendarApi? _calendarApi;
 
+  GoogleCalendarException _apiException(int? status, Object error) {
+    if (status == 401) {
+      return const GoogleCalendarException(
+        GoogleCalendarFailure.reauthorizationRequired,
+        'A autorização Google expirou. Liga o Calendar novamente.',
+      );
+    }
+    if (status == 403) {
+      return const GoogleCalendarException(
+        GoogleCalendarFailure.permissionDenied,
+        'O Google recusou o acesso ao Calendar ou às Tasks. Verifica as permissões.',
+      );
+    }
+    return GoogleCalendarException(
+        GoogleCalendarFailure.remote, 'Falha na API Google ($status): $error');
+  }
+
+  Future<bool> get isConnected async =>
+      _preferences.getBool(connectionPreferenceKey) ?? false;
+
+  Future<bool> connect() async {
+    try {
+      final granted = await _authService.requestCalendarAccess();
+      if (!granted) {
+        throw const GoogleCalendarException(
+          GoogleCalendarFailure.permissionDenied,
+          'Acesso ao Google Calendar não autorizado.',
+        );
+      }
+      await _preferences.setBool(connectionPreferenceKey, true);
+      _calendarApi = null;
+      return true;
+    } on GoogleCalendarException {
+      rethrow;
+    } catch (error) {
+      throw GoogleCalendarException(GoogleCalendarFailure.remote,
+          'Não foi possível ligar o Calendar: $error');
+    }
+  }
+
+  Future<void> disconnect() async {
+    await _preferences.setBool(connectionPreferenceKey, false);
+    _calendarApi = null;
+    try {
+      await _authService.disconnectGoogleAccess();
+    } catch (error) {
+      if (kDebugMode) debugPrint('Calendar disconnected locally: $error');
+    }
+  }
+
   Future<void> _ensureWriteAccess() async {
-    final granted = await _googleSignIn.requestScopes(_writeScopes);
-    if (!granted) {
-      throw Exception(
-          'Acesso de escrita ao Google Calendar/Tasks não autorizado');
+    if (!await isConnected) {
+      throw const GoogleCalendarException(
+        GoogleCalendarFailure.disconnected,
+        'Liga o Google Calendar nas definições da agenda para sincronizar.',
+      );
     }
   }
 
@@ -49,29 +120,44 @@ class GoogleCalendarService {
   }
 
   Future<AccessCredentials> _credentialsForCurrentAccount() async {
-    final account = _googleSignIn.currentUser ?? await _googleSignIn.signIn();
+    if (!await isConnected) {
+      throw const GoogleCalendarException(
+        GoogleCalendarFailure.disconnected,
+        'Google Calendar não está ligado.',
+      );
+    }
+    final account =
+        _googleSignIn.currentUser ?? await _googleSignIn.signInSilently();
     if (account == null) {
-      throw Exception('Login com Google cancelado');
+      await _preferences.setBool(connectionPreferenceKey, false);
+      throw const GoogleCalendarException(
+        GoogleCalendarFailure.reauthorizationRequired,
+        'A sessão Google expirou. Liga o Calendar novamente.',
+      );
     }
 
-    // google_sign_in 6.x documents canAccessScopes as Web-only. On Android,
-    // the requested scopes are supplied when the shared GoogleSignIn instance
-    // performs sign-in (see AuthService).
+    // Web needs an explicit scope validity check; mobile keeps the user's
+    // granted scopes with the same Google account session.
     if (kIsWeb) {
       final alreadyGranted =
           await _googleSignIn.canAccessScopes(_calendarScopes);
       if (!alreadyGranted) {
-        final granted = await _googleSignIn.requestScopes(_calendarScopes);
-        if (!granted) {
-          throw Exception('Acesso ao Google Calendar não autorizado');
-        }
+        await _preferences.setBool(connectionPreferenceKey, false);
+        throw const GoogleCalendarException(
+          GoogleCalendarFailure.reauthorizationRequired,
+          'A autorização do Google expirou. Liga o Calendar novamente.',
+        );
       }
     }
 
     final authentication = await account.authentication;
     final accessToken = authentication.accessToken;
     if (accessToken == null || accessToken.isEmpty) {
-      throw Exception('Não foi possível obter autorização do Google Calendar');
+      await _preferences.setBool(connectionPreferenceKey, false);
+      throw const GoogleCalendarException(
+        GoogleCalendarFailure.reauthorizationRequired,
+        'Não foi possível obter autorização. Liga o Calendar novamente.',
+      );
     }
     return AccessCredentials(
       AccessToken(
@@ -110,6 +196,8 @@ class GoogleCalendarService {
       if (calendarIds.isEmpty) calendarIds.add('primary');
 
       final events = <calendar.Event>[];
+      var readAtLeastOneCalendar = false;
+      var inaccessibleCalendar = false;
       for (final calendarId in calendarIds) {
         try {
           String? pageToken;
@@ -126,12 +214,25 @@ class GoogleCalendarService {
                   pageToken: pageToken,
                 )
                 .timeout(_requestTimeout);
+            readAtLeastOneCalendar = true;
             events.addAll(result.items ?? const []);
             pageToken = result.nextPageToken;
           } while (pageToken != null && pageToken.isNotEmpty);
-        } on calendar.DetailedApiRequestError {
-          // Um calendário sem permissão não deve impedir os restantes.
+        } on calendar.DetailedApiRequestError catch (error) {
+          // A single inaccessible calendar must not hide accessible calendars.
+          if (error.status == 401) throw _apiException(error.status, error);
+          if (error.status == 403) {
+            inaccessibleCalendar = true;
+          } else {
+            throw _apiException(error.status, error);
+          }
         }
+      }
+      if (!readAtLeastOneCalendar && inaccessibleCalendar) {
+        throw const GoogleCalendarException(
+          GoogleCalendarFailure.permissionDenied,
+          'Não há acesso aos calendários desta conta Google.',
+        );
       }
 
       events.sort((a, b) {
@@ -144,8 +245,13 @@ class GoogleCalendarService {
         return aStart.compareTo(bStart);
       });
       return events;
-    } catch (e) {
-      throw Exception('Erro ao buscar eventos: $e');
+    } on GoogleCalendarException {
+      rethrow;
+    } on calendar.DetailedApiRequestError catch (error) {
+      throw _apiException(error.status, error);
+    } catch (error) {
+      throw GoogleCalendarException(
+          GoogleCalendarFailure.remote, 'Erro ao buscar eventos: $error');
     }
   }
 
@@ -189,7 +295,8 @@ class GoogleCalendarService {
                 )
                 .timeout(_requestTimeout);
             for (final task in tasks.items ?? const []) {
-              final due = DateTime.tryParse(task.due ?? '')?.toUtc();
+              final rawDue = task.due ?? '';
+              final due = GoogleTaskTimeMapper.plannedStart(rawDue);
               if (due != null &&
                   !due.isBefore(startInclusive.toUtc()) &&
                   due.isBefore(endExclusive.toUtc())) {
@@ -202,6 +309,13 @@ class GoogleCalendarService {
         listPageToken = lists.nextPageToken;
       } while (listPageToken != null && listPageToken.isNotEmpty);
       return result;
+    } on GoogleCalendarException {
+      rethrow;
+    } on google_tasks.DetailedApiRequestError catch (error) {
+      throw _apiException(error.status, error);
+    } catch (error) {
+      throw GoogleCalendarException(
+          GoogleCalendarFailure.remote, 'Erro ao buscar Tasks: $error');
     } finally {
       client.close();
     }
@@ -236,13 +350,24 @@ class GoogleCalendarService {
                 .update(task, listId, taskId)
                 .timeout(_requestTimeout);
             return;
-          } on google_tasks.DetailedApiRequestError {
+          } on google_tasks.DetailedApiRequestError catch (error) {
             // The task is not in this list; continue searching.
+            if (error.status != 404) {
+              throw _apiException(error.status, error);
+            }
           }
         }
         listPageToken = lists.nextPageToken;
       } while (listPageToken != null && listPageToken.isNotEmpty);
-      throw Exception('Tarefa Google não encontrada');
+      throw const GoogleCalendarException(
+          GoogleCalendarFailure.remote, 'Tarefa Google não encontrada.');
+    } on GoogleCalendarException {
+      rethrow;
+    } on google_tasks.DetailedApiRequestError catch (error) {
+      throw _apiException(error.status, error);
+    } catch (error) {
+      throw GoogleCalendarException(GoogleCalendarFailure.remote,
+          'Erro ao concluir tarefa Google: $error');
     } finally {
       client.close();
     }
@@ -319,13 +444,15 @@ class GoogleCalendarService {
           print('Conflito ao criar evento. O dia pode estar cheio.');
         }
       }
-      throw Exception('Google Calendar (${e.status}): ${e.message}');
+      throw _apiException(e.status, e);
     } catch (e) {
       // Outros erros (rede, parsing, etc)
       if (kDebugMode) {
         print('Erro inesperado ao criar evento no Google Calendar: $e');
       }
-      throw Exception('Falha ao criar evento no Google Calendar: $e');
+      if (e is GoogleCalendarException) rethrow;
+      throw GoogleCalendarException(GoogleCalendarFailure.remote,
+          'Falha ao criar evento no Google Calendar: $e');
     }
   }
 
@@ -363,12 +490,14 @@ class GoogleCalendarService {
         print(
             'Erro da API do Google Calendar ao atualizar: ${e.status} - ${e.message}');
       }
-      throw Exception('Google Calendar (${e.status}): ${e.message}');
+      throw _apiException(e.status, e);
     } catch (e) {
       if (kDebugMode) {
         print('Erro inesperado ao atualizar evento no Google Calendar: $e');
       }
-      throw Exception('Falha ao atualizar evento no Google Calendar: $e');
+      if (e is GoogleCalendarException) rethrow;
+      throw GoogleCalendarException(GoogleCalendarFailure.remote,
+          'Falha ao atualizar evento no Google Calendar: $e');
     }
   }
 
@@ -399,13 +528,22 @@ class GoogleCalendarService {
           .delete('primary', eventId)
           .timeout(_requestTimeout);
     } catch (e) {
-      throw Exception('Erro ao deletar evento: $e');
+      if (e is calendar.DetailedApiRequestError) {
+        // Deletion is idempotent: a remote event already removed elsewhere is
+        // equivalent to a successful retry of the local tombstone.
+        if (e.status == 404) return;
+        throw _apiException(e.status, e);
+      }
+      if (e is GoogleCalendarException) rethrow;
+      throw GoogleCalendarException(
+          GoogleCalendarFailure.remote, 'Erro ao deletar evento: $e');
     }
   }
 
   /// Verificar se usuário tem permissão de Calendar
   Future<bool> hasCalendarPermission() async {
     try {
+      if (!await isConnected) return false;
       final account = _googleSignIn.currentUser;
       if (account == null) return false;
 

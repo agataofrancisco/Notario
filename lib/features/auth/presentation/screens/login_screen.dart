@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
+import '../../../../shared/widgets/app_components.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -123,70 +124,45 @@ class _LoginScreenState extends State<LoginScreen> {
             setState(() => _isLoading = false);
           }
         },
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Theme.of(context).colorScheme.primary,
-                Theme.of(context).colorScheme.secondary,
-              ],
-            ),
-          ),
-          child: SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24.0),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // Logo
                     Container(
-                      padding: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 20,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
+                        color: Theme.of(context).colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(20),
                       ),
                       child: Icon(
                         Icons.calendar_today_rounded,
-                        size: 60,
+                        size: 42,
                         color: Theme.of(context).colorScheme.primary,
                       ),
                     ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'NOTÁRIO',
-                      style: TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 2,
-                      ),
+                    const SizedBox(height: 16),
+                    const AppPageHeader(
+                      title: 'NOTÁRIO',
+                      subtitle: 'Motor de Disciplina',
+                      centered: true,
+                      padding: EdgeInsets.zero,
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Motor de Disciplina',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w300,
-                      ),
-                    ),
-                    const SizedBox(height: 48),
+                    const SizedBox(height: 28),
 
                     // Card de Login/Registro
                     Card(
-                      elevation: 8,
+                      elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
+                        side: BorderSide(
+                            color:
+                                Theme.of(context).colorScheme.outlineVariant),
                       ),
                       child: Padding(
                         padding: const EdgeInsets.all(24.0),
@@ -209,7 +185,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                                 .primary
                                             : Colors.transparent,
                                         foregroundColor: _isLogin
-                                            ? Colors.white
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .onPrimary
                                             : Theme.of(context)
                                                 .colorScheme
                                                 .primary,
@@ -239,7 +217,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                                 .primary
                                             : Colors.transparent,
                                         foregroundColor: !_isLogin
-                                            ? Colors.white
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .onPrimary
                                             : Theme.of(context)
                                                 .colorScheme
                                                 .primary,
@@ -355,11 +335,18 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                                 child: _isLoading
-                                    ? const SizedBox(
-                                        height: 20,
-                                        width: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
+                                    ? Semantics(
+                                        liveRegion: true,
+                                        label: _isLogin
+                                            ? 'A entrar na conta'
+                                            : 'A criar a conta',
+                                        child: const SizedBox(
+                                          height: 20,
+                                          width: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            semanticsLabel: 'A processar',
+                                          ),
                                         ),
                                       )
                                     : Text(
@@ -376,17 +363,26 @@ class _LoginScreenState extends State<LoginScreen> {
                               Row(
                                 children: [
                                   Expanded(
-                                      child: Divider(color: Colors.grey[400])),
+                                      child: Divider(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .outlineVariant)),
                                   Padding(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 16),
                                     child: Text(
                                       'OU',
-                                      style: TextStyle(color: Colors.grey[600]),
+                                      style: TextStyle(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant),
                                     ),
                                   ),
                                   Expanded(
-                                      child: Divider(color: Colors.grey[400])),
+                                      child: Divider(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .outlineVariant)),
                                 ],
                               ),
                               const SizedBox(height: 24),
@@ -396,8 +392,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                 onPressed:
                                     _isLoading ? null : _handleGoogleSignIn,
                                 icon: const Icon(Icons.login, size: 20),
-                                label:
-                                    const Text('Entrar com Google (Opcional)'),
+                                label: Semantics(
+                                  label: _isLoading
+                                      ? 'A entrar com Google'
+                                      : 'Entrar com Google',
+                                  child: const Text('Entrar com Google'),
+                                ),
                                 style: OutlinedButton.styleFrom(
                                   padding:
                                       const EdgeInsets.symmetric(vertical: 14),
@@ -414,12 +414,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 24),
 
                     // Versão
-                    const Text(
+                    Text(
                       'v1.0.0',
-                      style: TextStyle(
-                        color: Colors.white60,
-                        fontSize: 12,
-                      ),
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
                 ),

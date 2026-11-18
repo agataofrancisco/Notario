@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/config/app_timezone.dart';
 
 class DateSelector extends StatelessWidget {
   final DateTime selectedDate;
@@ -17,7 +18,7 @@ class DateSelector extends StatelessWidget {
     final isTomorrow = _isTomorrow(selectedDate);
 
     return Card(
-      margin: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
         child: Row(
@@ -46,7 +47,7 @@ class DateSelector extends StatelessWidget {
                                   .format(selectedDate),
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.grey[600],
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -77,14 +78,14 @@ class DateSelector extends StatelessWidget {
   }
 
   bool _isToday(DateTime date) {
-    final now = DateTime.now();
+    final now = AppTimeZone.now();
     return date.year == now.year &&
         date.month == now.month &&
         date.day == now.day;
   }
 
   bool _isTomorrow(DateTime date) {
-    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    final tomorrow = AppTimeZone.now().add(const Duration(days: 1));
     return date.year == tomorrow.year &&
         date.month == tomorrow.month &&
         date.day == tomorrow.day;
@@ -93,7 +94,7 @@ class DateSelector extends StatelessWidget {
   Future<void> _showDatePicker(BuildContext context) async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: selectedDate,
+      initialDate: AppTimeZone.inAppZone(selectedDate),
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );

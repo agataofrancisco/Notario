@@ -46,3 +46,4 @@ app.*.map.json
 
 # Firebase tools
 firebase-tools.exe
+tooling/firestore-rules-test/node_modules/

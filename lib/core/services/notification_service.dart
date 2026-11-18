@@ -14,6 +14,14 @@ class NotificationService {
   bool _initialized = false;
   void Function(String payload)? _onPayloadTap;
 
+  int _stableId(String key) {
+    var hash = 0x811c9dc5;
+    for (final unit in key.codeUnits) {
+      hash = ((hash ^ unit) * 0x01000193) & 0x7fffffff;
+    }
+    return hash;
+  }
+
   /// Inicializar serviço de notificações
   Future<void> initialize() async {
     if (_initialized) return;
@@ -100,13 +108,14 @@ class NotificationService {
   }) async {
     if (!_initialized) await initialize();
 
-    final reminderTime = startTime.subtract(Duration(minutes: minutesBefore));
+    final reminderTime =
+        startTime.toUtc().subtract(Duration(minutes: minutesBefore));
 
     // Não agendar se já passou
-    if (reminderTime.isBefore(DateTime.now())) return;
+    if (reminderTime.isBefore(AppTimeZone.now().toUtc())) return;
 
     await _notifications.zonedSchedule(
-      taskId.hashCode, // ID único baseado no taskId
+      _stableId('reminder:$taskId'),
       'Tarefa em $minutesBefore minutos',
       title,
       tz.TZDateTime.from(reminderTime, tz.local),
@@ -140,13 +149,14 @@ class NotificationService {
   }) async {
     if (!_initialized) await initialize();
 
-    if (startTime.isBefore(DateTime.now())) return;
+    final startUtc = startTime.toUtc();
+    if (startUtc.isBefore(AppTimeZone.now().toUtc())) return;
 
     await _notifications.zonedSchedule(
-      'start_$taskId'.hashCode,
+      _stableId('start:$taskId'),
       'Hora da tarefa! ⏰',
       title,
-      tz.TZDateTime.from(startTime, tz.local),
+      tz.TZDateTime.from(startUtc, tz.local),
       const NotificationDetails(
         android: AndroidNotificationDetails(
           'task_start',
@@ -179,10 +189,10 @@ class NotificationService {
     if (!_initialized) await initialize();
 
     // Não agendar se já passou
-    if (reminderTime.isBefore(DateTime.now())) return;
+    if (reminderTime.toUtc().isBefore(AppTimeZone.now().toUtc())) return;
 
     await _notifications.zonedSchedule(
-      noteId.hashCode,
+      _stableId('note:$noteId'),
       title,
       content,
       tz.TZDateTime.from(reminderTime, tz.local),
@@ -217,9 +227,9 @@ class NotificationService {
     if (!_initialized) await initialize();
 
     // Notificação de término (0 minutos restantes)
-    if (endTime.isAfter(DateTime.now())) {
+    if (endTime.toUtc().isAfter(AppTimeZone.now().toUtc())) {
       await _notifications.zonedSchedule(
-        'end_$taskId'.hashCode,
+        _stableId('end:$taskId'),
         'Tempo esgotado! ⏳',
         'O tempo para "$title" terminou.',
         tz.TZDateTime.from(endTime, tz.local),
@@ -249,9 +259,9 @@ class NotificationService {
 
     // Aviso de 5 minutos restantes (se houver tempo)
     final warningTime = endTime.subtract(const Duration(minutes: 5));
-    if (warningTime.isAfter(DateTime.now())) {
+    if (warningTime.toUtc().isAfter(AppTimeZone.now().toUtc())) {
       await _notifications.zonedSchedule(
-        'warn_$taskId'.hashCode,
+        _stableId('warning:$taskId'),
         '5 minutos restantes ⏱️',
         'Finalize "$title" em breve.',
         tz.TZDateTime.from(warningTime, tz.local),
@@ -278,7 +288,10 @@ class NotificationService {
 
   /// Cancelar notificação
   Future<void> cancelNotification(String id) async {
-    await _notifications.cancel(id.hashCode);
+    await _notifications.cancel(_stableId('reminder:$id'));
+    await _notifications.cancel(_stableId('start:$id'));
+    await _notifications.cancel(_stableId('end:$id'));
+    await _notifications.cancel(_stableId('warning:$id'));
   }
 
   /// Cancelar todas as notificações
@@ -339,13 +352,14 @@ class NotificationService {
   }) async {
     if (!_initialized) await initialize();
 
-    final now = DateTime.now();
+    final now = AppTimeZone.now();
 
     // Calcular próximo domingo às 20h
     final daysUntilSunday = (7 - now.weekday) % 7;
     final nextSunday =
         now.add(Duration(days: daysUntilSunday == 0 ? 7 : daysUntilSunday));
-    final notificationTime = DateTime(
+    final notificationTime = tz.TZDateTime(
+      tz.local,
       nextSunday.year,
       nextSunday.month,
       nextSunday.day,
@@ -384,7 +398,7 @@ class NotificationService {
     }
 
     await _notifications.zonedSchedule(
-      'weekly_summary'.hashCode,
+      _stableId('weekly_summary'),
       title,
       body,
       tz.TZDateTime.from(finalTime, tz.local),
@@ -418,13 +432,14 @@ class NotificationService {
   }) async {
     if (!_initialized) await initialize();
 
-    final now = DateTime.now();
+    final now = AppTimeZone.now();
 
     // Calcular próximo domingo às 19h
     final daysUntilSunday = (7 - now.weekday) % 7;
     final nextSunday =
         now.add(Duration(days: daysUntilSunday == 0 ? 7 : daysUntilSunday));
-    final notificationTime = DateTime(
+    final notificationTime = tz.TZDateTime(
+      tz.local,
       nextSunday.year,
       nextSunday.month,
       nextSunday.day,
@@ -438,7 +453,7 @@ class NotificationService {
         : notificationTime;
 
     await _notifications.zonedSchedule(
-      'weekly_planning'.hashCode,
+      _stableId('weekly_planning'),
       'Hora de Planejar! 📅',
       'Reserve um tempo para organizar as tarefas da próxima semana.',
       tz.TZDateTime.from(finalTime, tz.local),
@@ -466,7 +481,7 @@ class NotificationService {
 
   /// Cancelar notificações semanais
   Future<void> cancelWeeklyNotifications() async {
-    await _notifications.cancel('weekly_summary'.hashCode);
-    await _notifications.cancel('weekly_planning'.hashCode);
+    await _notifications.cancel(_stableId('weekly_summary'));
+    await _notifications.cancel(_stableId('weekly_planning'));
   }
 }

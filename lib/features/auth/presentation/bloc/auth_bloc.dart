@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/google_calendar_service.dart';
 import './auth_event.dart';
 import './auth_state.dart';
 
@@ -166,6 +167,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthLoading());
     try {
       await _authService.signOut();
+      await _prefs.remove(GoogleCalendarService.connectionPreferenceKey);
       await _prefs.clear();
       emit(AuthUnauthenticated());
     } catch (e) {

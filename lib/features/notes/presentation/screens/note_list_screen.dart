@@ -6,6 +6,7 @@ import 'note_form_screen.dart';
 import '../widgets/note_card.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
+import '../../../../shared/widgets/app_components.dart';
 
 class NoteListScreen extends StatelessWidget {
   const NoteListScreen({super.key});
@@ -16,18 +17,10 @@ class NoteListScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Minhas Notas'),
         elevation: 0,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
-            ),
-          ),
-        ),
+        scrolledUnderElevation: 0,
       ),
       body: const NoteListView(),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           Navigator.push(
             context,
@@ -39,7 +32,8 @@ class NoteListScreen extends StatelessWidget {
           });
         },
         tooltip: 'Nova Nota',
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.add),
+        label: const Text('Nova nota'),
       ),
     );
   }
@@ -84,83 +78,56 @@ class _NoteListViewState extends State<NoteListView> {
           }
 
           if (state is NoteError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Erro ao carregar notas',
-                    style: TextStyle(fontSize: 18, color: Colors.grey[700]),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    state.message,
-                    style: TextStyle(color: Colors.grey[600]),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: _loadNotes,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Tentar Novamente'),
-                  ),
-                ],
-              ),
+            return AppFeedbackState(
+              icon: Icons.cloud_off_outlined,
+              title: 'Não foi possível carregar as notas',
+              message: state.message,
+              actionLabel: 'Tentar novamente',
+              onAction: _loadNotes,
+              isError: true,
             );
           }
 
           if (state is NoteLoaded) {
             if (state.notes.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.note_add, size: 64, color: Colors.grey[300]),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Nenhuma nota criada',
-                      style: TextStyle(fontSize: 18, color: Colors.grey[700]),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Toque no + para criar sua primeira nota',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
+              return const AppFeedbackState(
+                icon: Icons.sticky_note_2_outlined,
+                title: 'Ainda não há notas',
+                message:
+                    'Use o botão de criar para guardar uma ideia ou lembrete.',
               );
             }
 
             return RefreshIndicator(
               onRefresh: () async => _loadNotes(),
-              child: ListView.builder(
-                padding: const EdgeInsets.all(8),
-                itemCount: state.notes.length,
-                itemBuilder: (context, index) {
-                  final note = state.notes[index];
-                  return Dismissible(
-                    key: Key(note.id),
-                    direction: DismissDirection.endToStart,
-                    background: Container(
-                      alignment: Alignment.centerRight,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      color: Colors.red,
-                      child: const Icon(Icons.delete, color: Colors.white),
-                    ),
-                    onDismissed: (direction) {
-                      context
-                          .read<NoteBloc>()
-                          .add(NoteDeleteRequested(note.id));
-                    },
-                    child: NoteCard(
-                      note: note,
-                      onTap: () => _navigateToForm(note),
-                      onDelete: () => _confirmDelete(note),
-                    ),
-                  );
-                },
+              child: AppContentFrame(
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                  itemCount: state.notes.length,
+                  itemBuilder: (context, index) {
+                    final note = state.notes[index];
+                    return Dismissible(
+                      key: Key(note.id),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        color: Colors.red,
+                        child: const Icon(Icons.delete, color: Colors.white),
+                      ),
+                      onDismissed: (direction) {
+                        context
+                            .read<NoteBloc>()
+                            .add(NoteDeleteRequested(note.id));
+                      },
+                      child: NoteCard(
+                        note: note,
+                        onTap: () => _navigateToForm(note),
+                        onDelete: () => _confirmDelete(note),
+                      ),
+                    );
+                  },
+                ),
               ),
             );
           }

@@ -6,6 +6,7 @@ import '../bloc/stats_bloc.dart';
 import '../widgets/calendar_heatmap.dart';
 import '../widgets/stats_overview_card.dart';
 import '../../../../core/services/statistics_service.dart';
+import '../../../../shared/widgets/app_components.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -34,6 +35,7 @@ class _StatsScreenState extends State<StatsScreen> {
       appBar: AppBar(
         title: const Text('Estatísticas'),
         elevation: 0,
+        scrolledUnderElevation: 0,
       ),
       body: BlocBuilder<StatsBloc, StatsState>(
         builder: (context, state) {
@@ -42,75 +44,53 @@ class _StatsScreenState extends State<StatsScreen> {
           }
 
           if (state is StatsError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Erro ao carregar estatísticas',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.grey[700]),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    state.message,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: _loadStats,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Tentar Novamente'),
-                  ),
-                ],
-              ),
+            return AppFeedbackState(
+              icon: Icons.cloud_off_outlined,
+              title: 'Não foi possível carregar as estatísticas',
+              message: state.message,
+              actionLabel: 'Tentar novamente',
+              onAction: _loadStats,
+              isError: true,
             );
           }
 
           if (state is StatsLoaded) {
             return RefreshIndicator(
               onRefresh: () async => _loadStats(),
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  StatsOverviewCard(stats: state.overallStats),
-                  const SizedBox(height: 16),
-                  CalendarHeatmap(
-                    weeklyStats: state.weeklyStats,
-                    onDayTap: (date) {
-                      // Poderia navegar para detalhes do dia
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                              'Dia selecionado: ${date.day}/${date.month}'),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  _buildAchievementsCard(state.overallStats),
-                  const SizedBox(height: 16),
-                  _buildWeeklyBreakdown(state.weeklyStats),
-                ],
+              child: AppContentFrame(
+                child: ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    StatsOverviewCard(stats: state.overallStats),
+                    const SizedBox(height: 16),
+                    CalendarHeatmap(
+                      weeklyStats: state.weeklyStats,
+                      onDayTap: (date) {
+                        // Poderia navegar para detalhes do dia
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                                'Dia selecionado: ${date.day}/${date.month}'),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    _buildAchievementsCard(state.overallStats),
+                    const SizedBox(height: 16),
+                    _buildWeeklyBreakdown(state.weeklyStats),
+                  ],
+                ),
               ),
             );
           }
 
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.analytics_outlined,
-                    size: 64, color: Colors.grey[300]),
-                const SizedBox(height: 16),
-                Text(
-                  'Carregue suas estatísticas',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.grey[700]),
-                ),
-              ],
-            ),
+          return AppFeedbackState(
+            icon: Icons.insights_outlined,
+            title: 'Veja o seu progresso',
+            message: 'Carregue as estatísticas para acompanhar a sua rotina.',
+            actionLabel: 'Carregar',
+            onAction: _loadStats,
           );
         },
       ),
@@ -119,7 +99,7 @@ class _StatsScreenState extends State<StatsScreen> {
 
   Widget _buildAchievementsCard(OverallStats stats) {
     return Card(
-      elevation: 2,
+      elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -128,7 +108,10 @@ class _StatsScreenState extends State<StatsScreen> {
           children: [
             Text(
               'Conquistas',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             Row(
@@ -176,12 +159,18 @@ class _StatsScreenState extends State<StatsScreen> {
           const SizedBox(height: 8),
           Text(
             value,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: color),
+            style: Theme.of(context)
+                .textTheme
+                .headlineSmall
+                ?.copyWith(fontWeight: FontWeight.bold, color: color),
           ),
           const SizedBox(height: 4),
           Text(
             title,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: Colors.grey[600]),
             textAlign: TextAlign.center,
           ),
         ],
@@ -191,7 +180,7 @@ class _StatsScreenState extends State<StatsScreen> {
 
   Widget _buildWeeklyBreakdown(List<DailyStats> weeklyStats) {
     return Card(
-      elevation: 2,
+      elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -200,7 +189,10 @@ class _StatsScreenState extends State<StatsScreen> {
           children: [
             Text(
               'Detalhes da Semana',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             ...weeklyStats.map((stats) => _buildDayRow(stats)),
@@ -222,7 +214,10 @@ class _StatsScreenState extends State<StatsScreen> {
             width: 60,
             child: Text(
               '${stats.date.day}/${stats.date.month}',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
           Expanded(
@@ -247,7 +242,9 @@ class _StatsScreenState extends State<StatsScreen> {
                     const SizedBox(width: 8),
                     Text(
                       hasData ? '${completionRate.toStringAsFixed(0)}%' : '-',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold, color: _getColorForRate(completionRate)),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: _getColorForRate(completionRate)),
                     ),
                   ],
                 ),
@@ -256,7 +253,10 @@ class _StatsScreenState extends State<StatsScreen> {
                   hasData
                       ? '${stats.completedTasks}/${stats.totalTasks} tarefas'
                       : 'Sem tarefas',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: Colors.grey[600]),
                 ),
               ],
             ),

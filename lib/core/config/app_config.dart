@@ -36,10 +36,7 @@ class AppConfig {
 
   /// Firestore is optional. Keep it off until the project has an explicit
   /// billing decision; SQLite, Google and the progress backend keep working.
-  static const bool enableFirestoreSync = bool.fromEnvironment(
-    'ENABLE_FIRESTORE_SYNC',
-    defaultValue: false,
-  );
+  static const bool enableFirestoreSync = false;
 
   static const String progressBackendUrl = String.fromEnvironment(
     'PROGRESS_BACKEND_URL',
@@ -50,7 +47,6 @@ class AppConfig {
   /// identify an app, but are not secrets and may safely be embedded here.
   static const String googleServerClientId = String.fromEnvironment(
     'GOOGLE_SERVER_CLIENT_ID',
-    defaultValue:
-        '525067357557-p65t0ap1mfjgo90ru7qep6068k7vg4fd.apps.googleusercontent.com',
+    defaultValue: '',
   );
 }

@@ -14,11 +14,17 @@ Google sign-in currently returns a `GoogleSignInAccount` without exchanging it f
 - Keep automated planning advisory-only: user confirmation controls task starts and schedule changes.
 - Establish Firebase-backed Google identity and a shared Calendar authorization boundary.
 - Make the changed flows testable and usable on small mobile viewports.
+- Use SQLite as the immediate agenda source for tasks and imported Google activities; remote sync is queued and retryable.
+- Store timed instants in UTC and derive day windows and notification wall times in `Africa/Luanda`; keep Google all-day entries on their civil date.
+- Represent focusable Google Tasks and Calendar Events as local task records. Calendar completion is app-local; Google Tasks completion is synchronized to Tasks API.
+- Preserve a Google Calendar all-day event's Luanda civil date without treating the event as a 24-hour focus block; use a 09:00, 30-minute editable planning slot because the external event supplies no focus interval.
+- Treat Google Tasks `due` as a civil date: use 09:00 Africa/Luanda as its planning slot and the end of that Luanda day as its local deadline, since Google's Tasks API ignores the time portion of `due`.
+- Compute completed planned capacity from actual focus minutes, so early completion releases the unused planned minutes.
 
 **Non-Goals:**
 
 - No generative model, remote recommendation service, user profiling, or paid AI integration.
-- No automatic rescheduling, conflict resolution across external calendars, or two-way import of arbitrary Google Calendar events in this change.
+- No automatic rescheduling, conflict resolution across external calendars, or two-way edits of arbitrary Google Calendar events in this change.
 - No Calendar sync for unauthenticated users and no storage of OAuth client secrets in the app.
 
 ## Decisions
@@ -52,6 +58,8 @@ This prevents duplicate pickers and unnecessary sensitive scope requests. Reques
 ### Calendar failure is non-blocking and observable
 
 Calendar operations return a typed connection/sync result rather than treating a missing or expired token as a successful empty response. Task creation and updates persist locally/Firestore first; a failed sync sets the existing task sync indicator to pending/needs-attention and exposes a reconnect action. Calendar disconnect revokes/disconnects local authorization and stops future synchronization without deleting task data.
+
+Deleting a Notário-created task with a linked Google event writes a durable SQLite tombstone before removing the local task. The periodic sync retries that remote deletion and stores failure count/error; deleting an imported Calendar event removes only its local cache row and never deletes the user's remote event. A remote 404 counts as success so an already-removed event does not retry forever.
 
 ### UI/UX review is a delivery gate, not a design guess
 

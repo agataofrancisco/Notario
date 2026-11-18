@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../tasks/data/repositories/task_repository.dart';
+import '../../../../shared/theme/app_theme.dart';
+import '../../../../core/config/app_timezone.dart';
+import '../../../../core/config/app_config.dart';
 
 class MiniCalendarCard extends StatefulWidget {
   final DateTime selectedDate;
@@ -20,7 +23,7 @@ class MiniCalendarCard extends StatefulWidget {
 }
 
 class _MiniCalendarCardState extends State<MiniCalendarCard> {
-  DateTime _weekStart = DateTime.now();
+  DateTime _weekStart = AppTimeZone.now();
   Map<String, Color> _dayColors = {};
 
   @override
@@ -43,7 +46,7 @@ class _MiniCalendarCardState extends State<MiniCalendarCard> {
   }
 
   DateTime _getWeekStart(DateTime date) {
-    final base = DateTime(date.year, date.month, date.day);
+    final base = AppTimeZone.dayStart(date);
     return base.subtract(Duration(days: base.weekday - 1));
   }
 
@@ -62,7 +65,7 @@ class _MiniCalendarCardState extends State<MiniCalendarCard> {
 
       final tasksByDay = <String, int>{};
       for (final task in tasks) {
-        final dataInicio = task.dataInicio.toLocal();
+        final dataInicio = AppTimeZone.inAppZone(task.dataInicio);
         final dayKey =
             '${dataInicio.year}-${dataInicio.month}-${dataInicio.day}';
         final duracao = task.duracaoMinutos;
@@ -73,16 +76,17 @@ class _MiniCalendarCardState extends State<MiniCalendarCard> {
         final day = _weekStart.add(Duration(days: i));
         final dayKey = '${day.year}-${day.month}-${day.day}';
         final occupied = tasksByDay[dayKey] ?? 0;
-        final ratio = occupied / 960;
+        final ratio = occupied / AppConfig.workMinutesPerDay;
 
         if (ratio >= 0.9) {
           colors[dayKey] = const Color(0xFFE53935);
         } else if (ratio >= 0.7) {
           colors[dayKey] = const Color(0xFFFF9800);
         } else if (ratio > 0) {
-          colors[dayKey] = const Color(0xFF667EEA);
+          colors[dayKey] = AppTheme.primaryColor;
         } else {
-          colors[dayKey] = Colors.grey.shade300;
+          colors[dayKey] =
+              Theme.of(context).colorScheme.surfaceContainerHighest;
         }
       }
 
@@ -107,16 +111,11 @@ class _MiniCalendarCardState extends State<MiniCalendarCard> {
 
     return Container(
       margin: const EdgeInsets.only(top: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.12),
-              blurRadius: 18,
-              offset: const Offset(0, 10))
-        ],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       child: Column(
         children: [
@@ -133,7 +132,7 @@ class _MiniCalendarCardState extends State<MiniCalendarCard> {
               Text(DateFormat('MMM yyyy', 'pt_PT').format(_weekStart),
                   style: theme.textTheme.labelMedium?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade700)),
+                      color: theme.colorScheme.onSurfaceVariant)),
               IconButton(
                   icon: const Icon(Icons.chevron_right),
                   onPressed: () => _navigateWeek(1),
@@ -144,61 +143,79 @@ class _MiniCalendarCardState extends State<MiniCalendarCard> {
             ],
           ),
           const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(7, (index) {
-              final d = days[index];
-              final isSelected = DateUtils.isSameDay(d, widget.selectedDate);
-              final isToday = DateUtils.isSameDay(d, DateTime.now());
-              final dayKey = '${d.year}-${d.month}-${d.day}';
-              final dotColor = _dayColors[dayKey] ?? Colors.grey.shade300;
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: List.generate(7, (index) {
+                final d = days[index];
+                final isSelected = DateUtils.isSameDay(d, widget.selectedDate);
+                final isToday = DateUtils.isSameDay(d, AppTimeZone.now());
+                final dayKey = '${d.year}-${d.month}-${d.day}';
+                final dotColor = _dayColors[dayKey] ??
+                    theme.colorScheme.surfaceContainerHighest;
 
-              return InkWell(
-                borderRadius: BorderRadius.circular(14),
-                onTap: () => widget.onChangeDate(d),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(labels[index],
-                          style: theme.textTheme.labelSmall?.copyWith(
-                              color: Colors.grey.shade600,
-                              fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
-                      Container(
-                        width: 26,
-                        height: 26,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: (isSelected || isToday)
-                              ? Border.all(
+                return Semantics(
+                  button: true,
+                  selected: isSelected,
+                  label: DateFormat('EEEE d MMMM', 'pt_PT').format(d),
+                  child: ExcludeSemantics(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: () => widget.onChangeDate(d),
+                      child: SizedBox(
+                        width: 44,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(labels[index],
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 8),
+                              Container(
+                                width: 26,
+                                height: 26,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
                                   color: isSelected
-                                      ? const Color(0xFF667EEA)
-                                      : Colors.grey.shade400,
-                                  width: 2)
-                              : null,
+                                      ? theme.colorScheme.primary
+                                      : null,
+                                  border: (isSelected || isToday)
+                                      ? Border.all(
+                                          color: isSelected
+                                              ? AppTheme.primaryColor
+                                              : theme
+                                                  .colorScheme.outlineVariant,
+                                          width: 2)
+                                      : null,
+                                ),
+                                child: Text('${d.day}',
+                                    style: theme.textTheme.labelMedium
+                                        ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                            color: isSelected
+                                                ? theme.colorScheme.onPrimary
+                                                : theme.colorScheme
+                                                    .onSurfaceVariant)),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                      color: dotColor, shape: BoxShape.circle)),
+                            ],
+                          ),
                         ),
-                        child: Text('${d.day}',
-                            style: theme.textTheme.labelMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: isSelected
-                                    ? Colors.black
-                                    : Colors.grey.shade700)),
                       ),
-                      const SizedBox(height: 8),
-                      Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                              color: dotColor, shape: BoxShape.circle)),
-                    ],
+                    ),
                   ),
-                ),
-              );
-            }),
+                );
+              }),
+            ),
           ),
         ],
       ),

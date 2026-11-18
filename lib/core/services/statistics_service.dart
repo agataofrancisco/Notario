@@ -1,5 +1,6 @@
 import '../../features/tasks/domain/entities/task.dart';
 import '../../features/tasks/data/repositories/task_repository.dart';
+import '../config/app_timezone.dart';
 
 /// Serviço para calcular estatísticas diárias
 class StatisticsService {
@@ -9,7 +10,7 @@ class StatisticsService {
 
   /// Calcula estatísticas para um dia específico
   Future<DailyStats> calculateDailyStats(String userId, DateTime date) async {
-    final startOfDay = DateTime(date.year, date.month, date.day);
+    final startOfDay = AppTimeZone.dayStart(date);
     final tasks = await _taskRepository.getByDate(userId, startOfDay);
 
     final totalTasks = tasks.length;
@@ -87,8 +88,7 @@ class StatisticsService {
     final completedByDate = <DateTime, int>{};
     for (var task
         in allTasks.where((t) => t.estado == EstadoTarefa.concluida)) {
-      final date = DateTime(
-          task.dataInicio.year, task.dataInicio.month, task.dataInicio.day);
+      final date = AppTimeZone.dayStart(AppTimeZone.inAppZone(task.dataInicio));
       completedByDate[date] = (completedByDate[date] ?? 0) + 1;
     }
 

@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../../../core/services/statistics_service.dart';
+import '../../../../core/config/app_timezone.dart';
 
 // Events
 abstract class StatsEvent extends Equatable {
@@ -70,7 +71,7 @@ class StatsBloc extends Bloc<StatsEvent, StatsState> {
   ) async {
     emit(StatsLoading());
     try {
-      final weekStart = event.weekStart ?? _getWeekStart(DateTime.now());
+      final weekStart = event.weekStart ?? _getWeekStart(AppTimeZone.now());
       final weeklyStats = await _statisticsService.calculateWeeklyStats(
         event.userId,
         weekStart,
@@ -90,7 +91,6 @@ class StatsBloc extends Bloc<StatsEvent, StatsState> {
 
   DateTime _getWeekStart(DateTime date) {
     final weekday = date.weekday;
-    return DateTime(date.year, date.month, date.day)
-        .subtract(Duration(days: weekday - 1));
+    return AppTimeZone.dayStart(date).subtract(Duration(days: weekday - 1));
   }
 }

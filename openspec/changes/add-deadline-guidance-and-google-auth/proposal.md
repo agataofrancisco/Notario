@@ -12,6 +12,9 @@ O Notário permite programar tarefas, mas não distingue o momento reservado par
 - Tornar o Google Sign-In o percurso de autenticação real via Firebase Auth e reutilizar a conta/sessão autorizada para acesso explícito ao Google Calendar, incluindo estados de autorização, erro, cancelamento e desligamento.
 - Executar uma auditoria UI/UX de todos os ecrãs, diálogos e estados de carregamento/erro/vazio em formatos móveis, com correções de usabilidade e acessibilidade encontradas durante a implementação.
 - Não introduzir modelo de IA nem serviço pago: as recomendações da primeira versão usam regras locais transparentes e dados já existentes no dispositivo/Firestore.
+- Importar e guardar tarefas e eventos do Google no armazenamento local para consulta, execução e notificações offline, sincronizando alterações pendentes quando houver rede.
+- Usar `Africa/Luanda` como fuso civil do produto e guardar instantes como UTC, preservando datas sem hora como datas civis.
+- Permitir modo foco para atividades locais e importadas; concluir atualiza primeiro o estado local, sincroniza quando possível e devolve ao tempo livre a duração planeada poupada.
 
 ## Capabilities
 
@@ -20,6 +23,7 @@ O Notário permite programar tarefas, mas não distingue o momento reservado par
 - `task-deadline-guidance`: deadlines de tarefa e recomendações explicáveis de trabalho prioritário no tempo livre.
 - `google-auth-calendar-access`: autenticação Google através de Firebase e concessão/revogação consistente de acesso ao Google Calendar.
 - `task-flow-usability`: requisitos de UX, acessibilidade e cobertura de estados para os fluxos de autenticação, criação, gestão e execução de tarefas.
+- `offline-agenda-focus`: cache local, notificações offline, fuso consistente, foco e sincronização de atividades Google.
 
 ### Modified Capabilities
 

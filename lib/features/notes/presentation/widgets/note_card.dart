@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../domain/entities/note.dart';
+import '../../../../shared/utils/plain_text.dart';
 
 class NoteCard extends StatelessWidget {
   final Note note;
@@ -20,12 +21,16 @@ class NoteCard extends StatelessWidget {
     final hasReminder = note.lembrete != null;
     final reminderPassed =
         hasReminder && note.lembrete!.isBefore(DateTime.now());
+    final reminderColor = reminderPassed
+        ? Theme.of(context).colorScheme.error
+        : Theme.of(context).colorScheme.primary;
 
     return Card(
-      elevation: 2,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: InkWell(
         onTap: onTap,
@@ -50,7 +55,8 @@ class NoteCard extends StatelessWidget {
                   ),
                   if (onDelete != null)
                     IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      icon: Icon(Icons.delete_outline,
+                          color: Theme.of(context).colorScheme.error),
                       onPressed: onDelete,
                       tooltip: 'Deletar nota',
                     ),
@@ -58,10 +64,10 @@ class NoteCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                note.conteudo,
+                toPlainText(note.conteudo),
                 style: GoogleFonts.inter(
                   fontSize: 14,
-                  color: Colors.grey[700],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
@@ -72,9 +78,7 @@ class NoteCard extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: reminderPassed
-                        ? Colors.red.withValues(alpha: 0.1)
-                        : Colors.blue.withValues(alpha: 0.1),
+                    color: reminderColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -83,7 +87,7 @@ class NoteCard extends StatelessWidget {
                       Icon(
                         reminderPassed ? Icons.alarm_off : Icons.alarm,
                         size: 16,
-                        color: reminderPassed ? Colors.red : Colors.blue,
+                        color: reminderColor,
                       ),
                       const SizedBox(width: 6),
                       Text(
@@ -92,7 +96,7 @@ class NoteCard extends StatelessWidget {
                             : 'Lembrete: ${DateFormat('dd/MM/yyyy HH:mm').format(note.lembrete!)}',
                         style: GoogleFonts.inter(
                           fontSize: 12,
-                          color: reminderPassed ? Colors.red : Colors.blue,
+                          color: reminderColor,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -105,7 +109,7 @@ class NoteCard extends StatelessWidget {
                 'Criado em ${DateFormat('dd/MM/yyyy').format(note.criadoEm)}',
                 style: GoogleFonts.inter(
                   fontSize: 11,
-                  color: Colors.grey[500],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ],

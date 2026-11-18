@@ -84,7 +84,7 @@ class Note extends Equatable {
     );
   }
 
-  /// Converte para Map (SQLite/Firestore partial)
+  /// Converte para Map usado pelo armazenamento SQLite.
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -98,7 +98,7 @@ class Note extends Equatable {
     };
   }
 
-  /// Cria Note a partir de Map (SQLite/Firestore partial)
+  /// Cria Note a partir de um registo SQLite ou do formato JSON legado.
   factory Note.fromMap(Map<String, dynamic> map) {
     return Note(
       id: map['id'] as String,
@@ -108,9 +108,11 @@ class Note extends Equatable {
       lembrete: map['data_lembrete'] != null || map['lembrete'] != null
           ? DateTime.parse((map['data_lembrete'] ?? map['lembrete']) as String)
           : null,
-      notificacaoEnviada: (map['notificacao_enviada'] as int? ?? 0) == 1 || (map['notificacaoEnviada'] == true),
+      notificacaoEnviada: (map['notificacao_enviada'] as int? ?? 0) == 1 ||
+          (map['notificacaoEnviada'] == true),
       criadoEm: DateTime.parse((map['criado_em'] ?? map['criadoEm']) as String),
-      atualizadoEm: DateTime.parse((map['atualizado_em'] ?? map['atualizadoEm']) as String),
+      atualizadoEm: DateTime.parse(
+          (map['atualizado_em'] ?? map['atualizadoEm']) as String),
     );
   }
 }

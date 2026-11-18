@@ -1,81 +1,89 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:sqflite/sqflite.dart';
+import '../../../../core/database/database_helper.dart';
 import '../../domain/entities/note.dart';
 
+/// Notes are stored on-device so creating and reading them never requires
+/// Firestore or an active connection.
 class NoteRepository {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final DatabaseHelper _databaseHelper = DatabaseHelper.instance;
 
-  CollectionReference get _notesCollection => _firestore.collection('notes');
-
-  // Criar nota
   Future<void> create(Note note) async {
-    await _notesCollection.doc(note.id).set(note.toJson());
+    final db = await _databaseHelper.database;
+    await db.insert(
+      'notes',
+      note.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
-  // Obter nota por ID
   Future<Note?> getById(String id) async {
-    final doc = await _notesCollection.doc(id).get();
-    if (!doc.exists) return null;
-    return Note.fromJson(doc.data() as Map<String, dynamic>);
+    final db = await _databaseHelper.database;
+    final rows = await db.query(
+      'notes',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : Note.fromMap(rows.first);
   }
 
-  // Obter todas as notas do utilizador (Stream para sync em tempo real)
-  Stream<List<Note>> watchUserNotes(String userId) {
-    return _notesCollection
-        .where('userId', isEqualTo: userId)
-        .orderBy('criadoEm', descending: true)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => Note.fromJson(doc.data() as Map<String, dynamic>))
-            .toList());
+  Stream<List<Note>> watchUserNotes(String userId) async* {
+    yield await getByUserId(userId);
   }
 
-  // Manter compatibilidade com Future se necessário, mas preferir Stream
   Future<List<Note>> getByUserId(String userId) async {
-    final snapshot = await _notesCollection
-        .where('userId', isEqualTo: userId)
-        .orderBy('criadoEm', descending: true)
-        .get();
-
-    return snapshot.docs
-        .map((doc) => Note.fromJson(doc.data() as Map<String, dynamic>))
-        .toList();
+    final db = await _databaseHelper.database;
+    final rows = await db.query(
+      'notes',
+      where: 'user_id = ?',
+      whereArgs: [userId],
+      orderBy: 'criado_em DESC',
+    );
+    return rows.map(Note.fromMap).toList();
   }
 
-  // Obter notas com lembretes pendentes
-  Stream<List<Note>> watchPendingReminders(String userId) {
-    final now = DateTime.now();
-    return _notesCollection
-        .where('userId', isEqualTo: userId)
-        .where('notificacaoEnviada', isEqualTo: false)
-        .where('lembrete', isLessThanOrEqualTo: Timestamp.fromDate(now))
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => Note.fromJson(doc.data() as Map<String, dynamic>))
-            .toList());
+  Future<List<Note>> getPendingReminders(String userId) async {
+    final db = await _databaseHelper.database;
+    final rows = await db.query(
+      'notes',
+      where: 'user_id = ? AND notificacao_enviada = 0 '
+          'AND data_lembrete IS NOT NULL AND data_lembrete <= ?',
+      whereArgs: [userId, DateTime.now().toIso8601String()],
+      orderBy: 'data_lembrete ASC',
+    );
+    return rows.map(Note.fromMap).toList();
   }
 
-  // Atualizar nota
   Future<void> update(Note note) async {
-    await _notesCollection.doc(note.id).update(note.toJson());
+    final db = await _databaseHelper.database;
+    await db.update(
+      'notes',
+      note.toMap(),
+      where: 'id = ?',
+      whereArgs: [note.id],
+    );
   }
 
-  // Deletar nota
   Future<void> delete(String id) async {
-    await _notesCollection.doc(id).delete();
+    final db = await _databaseHelper.database;
+    await db.delete('notes', where: 'id = ?', whereArgs: [id]);
   }
 
-  // Marcar notificação como enviada
   Future<void> markNotificationSent(String id) async {
-    await _notesCollection.doc(id).update({
-      'notificacaoEnviada': true,
-      'atualizadoEm': FieldValue.serverTimestamp(),
-    });
+    final db = await _databaseHelper.database;
+    await db.update(
+      'notes',
+      {
+        'notificacao_enviada': 1,
+        'atualizado_em': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
-  // Limpar todas as notas
   Future<void> clear() async {
-    // Implementação perigosa no Firestore, melhor evitar ou deletar por lote
-    // Deixando vazio por segurança ou implementando delete por batch por user
-    // Mas como é 'clear', assumindo logout, não precisa deletar do server.
+    final db = await _databaseHelper.database;
+    await db.delete('notes');
   }
 }

@@ -1,9 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../features/tasks/domain/entities/task.dart';
+import '../config/app_config.dart';
 
 /// Repositório de tarefas usando Firestore
 class TaskFirestoreRepository {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  TaskFirestoreRepository({FirebaseFirestore? firestore})
+      : _firestore = firestore ?? FirebaseFirestore.instance;
+
+  final FirebaseFirestore _firestore;
 
   // Referência à coleção de tarefas
   CollectionReference get _tasksCollection => _firestore.collection('tasks');
@@ -200,7 +204,7 @@ class TaskFirestoreRepository {
       }
 
       // Constante: minutos úteis por dia (16 horas)
-      const minutosUteisDia = 960;
+      const minutosUteisDia = AppConfig.workMinutesPerDay;
 
       // 1. Buscar tarefas do dia
       final startOfDay = DateTime(data.year, data.month, data.day);
@@ -423,7 +427,9 @@ class TaskFirestoreRepository {
         return total + ((data['duracaoMinutos'] as num?)?.toInt() ?? 0);
       });
 
-      if (960 - ocupado >= duracaoNecessaria) dias.add(dia);
+      if (AppConfig.workMinutesPerDay - ocupado >= duracaoNecessaria) {
+        dias.add(dia);
+      }
     }
     return dias;
   }

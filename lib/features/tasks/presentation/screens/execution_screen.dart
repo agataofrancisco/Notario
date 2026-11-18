@@ -7,6 +7,8 @@ import '../../data/repositories/task_repository.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../../core/config/app_timezone.dart';
 import '../widgets/hourglass_timer.dart';
+import '../../../../shared/widgets/app_components.dart';
+import '../../../../shared/utils/plain_text.dart';
 
 class ExecutionScreen extends StatelessWidget {
   final Task task;
@@ -64,15 +66,7 @@ class _ExecutionView extends StatelessWidget {
         appBar: AppBar(
           title: const Text('Modo Foco'),
           elevation: 0,
-          flexibleSpace: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
-              ),
-            ),
-          ),
+          scrolledUnderElevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.close),
             onPressed: () async {
@@ -96,8 +90,8 @@ class _ExecutionView extends StatelessWidget {
               );
 
               if (shouldPop == true && context.mounted) {
-                // Opcional: Pausar ou Parar explicitamente se necessário
-                // Mas o dispose do Bloc via BlocProvider já cancela o timer
+                await context.read<ExecutionBloc>().pauseForExit();
+                if (!context.mounted) return;
                 Navigator.of(context).pop();
               }
             },
@@ -216,122 +210,134 @@ class _ExecutionView extends StatelessWidget {
             final remainingSeconds = state.remainingSeconds;
             final isOvertime = remainingSeconds < 0;
 
-            Color timerColor = Theme.of(context).primaryColor;
-            if (progress < 0.2) timerColor = Colors.orange;
-            if (isOvertime) timerColor = Colors.red;
+            Color timerColor = Theme.of(context).colorScheme.primary;
+            if (progress < 0.2) timerColor = const Color(0xFF946200);
+            if (isOvertime) timerColor = Theme.of(context).colorScheme.error;
+            final timerSize =
+                (MediaQuery.sizeOf(context).width - 64).clamp(160.0, 240.0);
 
             final isFinishing = state is ExecutionFinishing;
 
             return Stack(
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const SizedBox(height: 20),
-                      Text(
-                        task.titulo,
-                        style: GoogleFonts.inter(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      if (task.descricao != null) ...[
-                        const SizedBox(height: 8),
+                AppContentFrame(
+                  maxWidth: 620,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const SizedBox(height: 12),
                         Text(
-                          task.descricao!,
-                          style: GoogleFonts.inter(),
+                          task.titulo,
+                          style: GoogleFonts.inter(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
                           textAlign: TextAlign.center,
                         ),
+                        if (task.descricao != null &&
+                            task.descricao!.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            toPlainText(task.descricao),
+                            style: GoogleFonts.inter(),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                        const SizedBox(height: 24),
+                        Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            SizedBox(
+                              width: timerSize,
+                              height: timerSize,
+                              child: HourglassTimer(
+                                progress: progress,
+                                size: timerSize,
+                                color: timerColor,
+                              ),
+                            ),
+                            Semantics(
+                              label:
+                                  isOvertime ? 'Tempo extra' : 'Tempo restante',
+                              value: _formatTime(isOvertime
+                                  ? elapsed - totalSeconds
+                                  : remainingSeconds),
+                              child: ExcludeSemantics(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      isOvertime ? 'TEMPO EXTRA' : 'RESTANTE',
+                                      style: GoogleFonts.inter(
+                                        color: Colors.grey,
+                                        fontSize: 12,
+                                        letterSpacing: 1.5,
+                                      ),
+                                    ),
+                                    Text(
+                                      _formatTime(isOvertime
+                                          ? elapsed - totalSeconds
+                                          : remainingSeconds),
+                                      style: GoogleFonts.inter(
+                                        fontSize: timerSize * 0.19,
+                                        fontWeight: FontWeight.bold,
+                                        color: timerColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            if (state is ExecutionRunning)
+                              OutlinedButton.icon(
+                                onPressed: isFinishing
+                                    ? null
+                                    : () {
+                                        context
+                                            .read<ExecutionBloc>()
+                                            .add(ExecutionPaused());
+                                      },
+                                icon: const Icon(Icons.pause),
+                                label: const Text('Pausar'),
+                              )
+                            else if (state is ExecutionPausedState)
+                              OutlinedButton.icon(
+                                onPressed: isFinishing
+                                    ? null
+                                    : () {
+                                        context
+                                            .read<ExecutionBloc>()
+                                            .add(ExecutionResumed());
+                                      },
+                                icon: const Icon(Icons.play_arrow),
+                                label: const Text('Retomar'),
+                              ),
+                            FilledButton.icon(
+                              onPressed: isFinishing
+                                  ? null
+                                  : () {
+                                      context
+                                          .read<ExecutionBloc>()
+                                          .add(ExecutionFinished());
+                                    },
+                              icon: const Icon(Icons.check),
+                              label: const Text('Concluir'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
                       ],
-                      const Spacer(),
-                      Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          SizedBox(
-                            width: 250,
-                            height: 250,
-                            child: HourglassTimer(
-                              progress: progress,
-                              size: 250,
-                              color: timerColor,
-                            ),
-                          ),
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                isOvertime ? 'TEMPO EXTRA' : 'RESTANTE',
-                                style: GoogleFonts.inter(
-                                  color: Colors.grey,
-                                  fontSize: 12,
-                                  letterSpacing: 1.5,
-                                ),
-                              ),
-                              Text(
-                                _formatTime(isOvertime
-                                    ? elapsed - totalSeconds
-                                    : remainingSeconds),
-                                style: GoogleFonts.inter(
-                                  fontSize: 48,
-                                  fontWeight: FontWeight.bold,
-                                  color: timerColor,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const Spacer(),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (state is ExecutionRunning)
-                            FloatingActionButton.large(
-                              onPressed: isFinishing
-                                  ? null
-                                  : () {
-                                      context
-                                          .read<ExecutionBloc>()
-                                          .add(ExecutionPaused());
-                                    },
-                              backgroundColor:
-                                  isFinishing ? Colors.grey : Colors.orange,
-                              child: const Icon(Icons.pause, size: 32),
-                            )
-                          else if (state is ExecutionPausedState)
-                            FloatingActionButton.large(
-                              onPressed: isFinishing
-                                  ? null
-                                  : () {
-                                      context
-                                          .read<ExecutionBloc>()
-                                          .add(ExecutionResumed());
-                                    },
-                              backgroundColor:
-                                  isFinishing ? Colors.grey : Colors.green,
-                              child: const Icon(Icons.play_arrow, size: 32),
-                            ),
-                          const SizedBox(width: 32),
-                          FloatingActionButton.large(
-                            onPressed: isFinishing
-                                ? null
-                                : () {
-                                    context
-                                        .read<ExecutionBloc>()
-                                        .add(ExecutionFinished());
-                                  },
-                            backgroundColor: isFinishing
-                                ? Colors.grey
-                                : Theme.of(context).primaryColor,
-                            child: const Icon(Icons.check, size: 32),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 40),
-                    ],
+                    ),
                   ),
                 ),
                 if (isFinishing)

@@ -24,6 +24,11 @@ class ExecutionStarted extends ExecutionEvent {
 
 class ExecutionPaused extends ExecutionEvent {}
 
+class _PauseForExit extends ExecutionEvent {
+  final Completer<void> completer;
+  const _PauseForExit(this.completer);
+}
+
 class ExecutionResumed extends ExecutionEvent {}
 
 class ExecutionStopped extends ExecutionEvent {}
@@ -106,6 +111,9 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
   final NotificationService _notificationService;
 
   Timer? _timer;
+  int _baseElapsedSeconds = 0;
+  DateTime? _runningSinceUtc;
+  bool _timeExpiredNotified = false;
 
   ExecutionBloc({
     required TaskRepository repository,
@@ -115,6 +123,7 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
         super(const ExecutionInitial()) {
     on<ExecutionStarted>(_onStarted);
     on<ExecutionPaused>(_onPaused);
+    on<_PauseForExit>(_onPauseForExit);
     on<ExecutionResumed>(_onResumed);
     on<ExecutionStopped>(_onStopped);
     on<ExecutionSkipped>(_onSkipped);
@@ -125,45 +134,89 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
   }
 
   @override
-  Future<void> close() {
+  Future<void> close() async {
     _timer?.cancel();
-    return super.close();
+    if (state is ExecutionRunning && state.task != null) {
+      await _repository.pauseFocusSession(state.task!.id, _currentElapsed());
+    }
+    await super.close();
   }
 
-  void _onStarted(ExecutionStarted event, Emitter<ExecutionState> emit) async {
+  Future<void> _onStarted(
+      ExecutionStarted event, Emitter<ExecutionState> emit) async {
     _timer?.cancel();
+    _timeExpiredNotified = false;
 
     // Atualizar estado da tarefa no banco
     try {
       await _repository.startTask(event.task.id);
+      _baseElapsedSeconds = await _repository.startFocusSession(event.task.id);
+      _runningSinceUtc = DateTime.now().toUtc();
       // Cancelar notificação de início se existir
       await _notificationService.cancelNotification(event.task.id);
     } catch (e) {
       // Log erro?
     }
 
-    emit(ExecutionRunning(task: event.task, elapsedSeconds: 0));
+    emit(ExecutionRunning(
+        task: event.task, elapsedSeconds: _baseElapsedSeconds));
     _startTicker();
   }
 
-  void _onPaused(ExecutionPaused event, Emitter<ExecutionState> emit) {
+  Future<void> _onPaused(
+      ExecutionPaused event, Emitter<ExecutionState> emit) async {
     if (state is ExecutionRunning) {
       _timer?.cancel();
-      emit(ExecutionPausedState(
-          task: state.task!, elapsedSeconds: state.elapsedSeconds));
+      final elapsed = _currentElapsed();
+      _baseElapsedSeconds = elapsed;
+      _runningSinceUtc = null;
+      await _repository.pauseFocusSession(state.task!.id, elapsed);
+      emit(ExecutionPausedState(task: state.task!, elapsedSeconds: elapsed));
     }
   }
 
-  void _onResumed(ExecutionResumed event, Emitter<ExecutionState> emit) {
+  Future<void> pauseForExit() {
+    final completer = Completer<void>();
+    add(_PauseForExit(completer));
+    return completer.future;
+  }
+
+  Future<void> _onPauseForExit(
+      _PauseForExit event, Emitter<ExecutionState> emit) async {
+    try {
+      if (state is ExecutionRunning) {
+        _timer?.cancel();
+        final elapsed = _currentElapsed();
+        _baseElapsedSeconds = elapsed;
+        _runningSinceUtc = null;
+        await _repository.pauseFocusSession(state.task!.id, elapsed);
+        emit(ExecutionPausedState(task: state.task!, elapsedSeconds: elapsed));
+      }
+    } finally {
+      if (!event.completer.isCompleted) event.completer.complete();
+    }
+  }
+
+  Future<void> _onResumed(
+      ExecutionResumed event, Emitter<ExecutionState> emit) async {
     if (state is ExecutionPausedState) {
+      _baseElapsedSeconds = await _repository.startFocusSession(state.task!.id);
+      _runningSinceUtc = DateTime.now().toUtc();
       emit(ExecutionRunning(
-          task: state.task!, elapsedSeconds: state.elapsedSeconds));
+          task: state.task!, elapsedSeconds: _baseElapsedSeconds));
       _startTicker();
     }
   }
 
-  void _onStopped(ExecutionStopped event, Emitter<ExecutionState> emit) {
+  Future<void> _onStopped(
+      ExecutionStopped event, Emitter<ExecutionState> emit) async {
     _timer?.cancel();
+    final task = state.task;
+    if (task != null && state is ExecutionRunning) {
+      final elapsed = _currentElapsed();
+      await _repository.pauseFocusSession(task.id, elapsed);
+    }
+    _runningSinceUtc = null;
     emit(const ExecutionInitial());
   }
 
@@ -171,6 +224,7 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
     _timer?.cancel();
     final task = state.task;
     if (task != null) {
+      await _repository.clearFocusSession(task.id);
       await _repository.skipTask(task.id);
     }
     emit(const ExecutionInitial());
@@ -181,6 +235,7 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
     _timer?.cancel();
     final task = state.task;
     if (task != null) {
+      await _repository.clearFocusSession(task.id);
       await _repository.rescheduleTask(task.id, event.newDate);
     }
     emit(const ExecutionInitial());
@@ -191,6 +246,7 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
     _timer?.cancel();
     final task = state.task;
     if (task != null) {
+      await _repository.clearFocusSession(task.id);
       await _repository.cancelTask(task.id);
     }
     emit(const ExecutionInitial());
@@ -203,22 +259,25 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
     final task = state.task;
     if (task == null) return;
 
-    final totalMinutes = (state.elapsedSeconds / 60).ceil();
+    final elapsed =
+        state is ExecutionRunning ? _currentElapsed() : state.elapsedSeconds;
+    final totalMinutes = (elapsed / 60).ceil();
 
     emit(ExecutionFinishing(
       task: task,
-      elapsedSeconds: state.elapsedSeconds,
+      elapsedSeconds: elapsed,
     ));
 
     try {
       await _repository.completeTask(task.id, totalMinutes);
+      await _repository.clearFocusSession(task.id);
     } catch (e) {
       // Log erro
     }
 
     emit(ExecutionCompleted(
       task: task,
-      elapsedSeconds: state.elapsedSeconds,
+      elapsedSeconds: elapsed,
       totalTimeSpentMinutes: totalMinutes,
     ));
 
@@ -230,12 +289,14 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
 
     emit(ExecutionRunning(
       task: state.task!,
-      elapsedSeconds: event.elapsedSeconds,
+      elapsedSeconds:
+          state is ExecutionRunning ? _currentElapsed() : event.elapsedSeconds,
     ));
 
     // Verificar se o tempo acabou
     final totalSeconds = (state.task!.duracaoMinutos) * 60;
-    if (event.elapsedSeconds == totalSeconds) {
+    if (event.elapsedSeconds >= totalSeconds && !_timeExpiredNotified) {
+      _timeExpiredNotified = true;
       _notificationService.showImmediateNotification(
         title: "Tempo Esgotado! ⏰",
         body:
@@ -248,7 +309,14 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
   void _startTicker() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      add(_ExecutionTicked(state.elapsedSeconds + 1));
+      add(_ExecutionTicked(_currentElapsed()));
     });
+  }
+
+  int _currentElapsed() {
+    final started = _runningSinceUtc;
+    if (started == null) return _baseElapsedSeconds;
+    return _baseElapsedSeconds +
+        DateTime.now().toUtc().difference(started).inSeconds.clamp(0, 1 << 30);
   }
 }

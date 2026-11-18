@@ -4,19 +4,42 @@ import '../config/app_config.dart';
 import '../domain/entities/app_user.dart';
 
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  static const _googleScopes = <String>[
-    'email',
+  static const _identityScopes = <String>['email'];
+  static const calendarScopes = <String>[
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/tasks.readonly',
+    'https://www.googleapis.com/auth/calendar.events',
+    'https://www.googleapis.com/auth/tasks',
   ];
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: _googleScopes,
-    serverClientId: AppConfig.googleServerClientId,
-  );
+  AuthService({FirebaseAuth? auth, GoogleSignIn? googleSignIn})
+      : _auth = auth ?? FirebaseAuth.instance,
+        _googleSignIn = googleSignIn ??
+            GoogleSignIn(
+              scopes: _identityScopes,
+              serverClientId: AppConfig.googleServerClientId.isEmpty
+                  ? null
+                  : AppConfig.googleServerClientId,
+            );
+
+  final FirebaseAuth _auth;
+  final GoogleSignIn _googleSignIn;
 
   /// Reuse the same Google session for incremental Calendar/Tasks scopes.
   GoogleSignIn get googleSignIn => _googleSignIn;
+
+  /// Requests the Calendar/Tasks scopes only after the user chooses Connect.
+  /// The active Google account is reused whenever the session is available.
+  Future<bool> requestCalendarAccess() async {
+    final account = _googleSignIn.currentUser ??
+        await _googleSignIn.signInSilently() ??
+        await _googleSignIn.signIn();
+    if (account == null) return false;
+    return _googleSignIn.requestScopes(calendarScopes);
+  }
+
+  Future<void> disconnectGoogleAccess() async {
+    await _googleSignIn.disconnect();
+  }
 
   /// Short-lived Google ID token used only to authenticate against the
   /// progress backend. It is never persisted in SQLite or sent to Calendar.

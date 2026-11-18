@@ -2,6 +2,23 @@
 
 This document explains how to deploy the Firestore indexes required for the Notário app.
 
+## Deadline storage and access
+
+`tasks.deadline` is optional. Deadline guidance reads the user's SQLite task cache,
+so it does not add a Firestore deadline query and needs no new composite index.
+`firestore.rules` authorizes task creation by the incoming `userId`, and reads,
+updates, and deletes only for the owning Firebase UID. Updates cannot transfer a
+document to another UID. The same owner rule applies to notes.
+
+To deploy the current rules and indexes after reviewing the Firebase project:
+
+```bash
+firebase deploy --only firestore:rules,firestore:indexes --project notario-6961f
+```
+
+Run that command from the repository root after `firebase login`. Deadline
+guidance remains local if remote rules/indexes cannot be deployed.
+
 ## Prerequisites
 
 - Firebase CLI installed (`npm install -g firebase-tools`)

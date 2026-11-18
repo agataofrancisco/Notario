@@ -3,9 +3,11 @@ import 'package:path/path.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
-  static Database? _database;
 
   DatabaseHelper._init();
+  DatabaseHelper.forTesting(Database database) : _database = database;
+
+  Database? _database;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -19,7 +21,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 8,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -41,6 +43,36 @@ class DatabaseHelper {
     }
     if (oldVersion < 4) {
       await _createProgressTables(db);
+    }
+    if (oldVersion < 5) {
+      await _createFocusSessionTable(db);
+    }
+    if (oldVersion < 6) {
+      await db.execute('DROP INDEX IF EXISTS idx_tasks_remote_event');
+      await db
+          .execute('''CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_remote_event
+        ON tasks(user_id, remote_type, google_event_id)''');
+    }
+    if (oldVersion < 7) {
+      await db.execute('ALTER TABLE notes RENAME TO notes_old');
+      await _createNotesTable(db);
+      await db.execute('''
+        INSERT INTO notes (
+          id, user_id, google_event_id, titulo, conteudo, data_lembrete,
+          notificacao_enviada, sincronizado, versao, criado_em, atualizado_em, sync_status
+        )
+        SELECT id, user_id, google_event_id, titulo, conteudo,
+          NULLIF(data_lembrete, ''), 0, sincronizado, versao, criado_em,
+          atualizado_em, sync_status
+        FROM notes_old
+      ''');
+      await db.execute('DROP TABLE notes_old');
+      await db.execute('CREATE INDEX idx_notes_user_id ON notes(user_id)');
+      await db.execute(
+          'CREATE INDEX idx_notes_data_lembrete ON notes(data_lembrete)');
+    }
+    if (oldVersion < 8) {
+      await db.execute('ALTER TABLE tasks ADD COLUMN deadline TEXT');
     }
   }
 
@@ -83,6 +115,7 @@ class DatabaseHelper {
         criado_em TEXT NOT NULL,
         atualizado_em TEXT NOT NULL,
         concluido_em TEXT,
+        deadline TEXT,
         sync_status TEXT DEFAULT 'synced',
         remote_type TEXT DEFAULT 'local',
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
@@ -99,24 +132,13 @@ class DatabaseHelper {
     await db.execute('''
       CREATE INDEX idx_tasks_sync_status ON tasks(sync_status)
     ''');
+    await db.execute('''
+      CREATE UNIQUE INDEX idx_tasks_remote_event
+      ON tasks(user_id, remote_type, google_event_id)
+    ''');
 
     // Tabela de notas
-    await db.execute('''
-      CREATE TABLE notes (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        google_event_id TEXT,
-        titulo TEXT NOT NULL,
-        conteudo TEXT NOT NULL,
-        data_lembrete TEXT NOT NULL,
-        sincronizado INTEGER DEFAULT 0,
-        versao INTEGER DEFAULT 1,
-        criado_em TEXT NOT NULL,
-        atualizado_em TEXT NOT NULL,
-        sync_status TEXT DEFAULT 'synced',
-        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-      )
-    ''');
+    await _createNotesTable(db);
 
     // Índices para notas
     await db.execute('''
@@ -165,6 +187,38 @@ class DatabaseHelper {
       CREATE INDEX idx_sync_queue_processado ON sync_queue(processado)
     ''');
     await _createProgressTables(db);
+    await _createFocusSessionTable(db);
+  }
+
+  Future<void> _createNotesTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE notes (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        google_event_id TEXT,
+        titulo TEXT NOT NULL,
+        conteudo TEXT NOT NULL,
+        data_lembrete TEXT,
+        notificacao_enviada INTEGER DEFAULT 0,
+        sincronizado INTEGER DEFAULT 0,
+        versao INTEGER DEFAULT 1,
+        criado_em TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL,
+        sync_status TEXT DEFAULT 'synced',
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+      )
+    ''');
+  }
+
+  Future<void> _createFocusSessionTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS focus_sessions (
+        task_id TEXT PRIMARY KEY,
+        elapsed_seconds INTEGER NOT NULL DEFAULT 0,
+        running_since_utc TEXT,
+        updated_at_utc TEXT NOT NULL
+      )
+    ''');
   }
 
   Future<void> _createProgressTables(Database db) async {
@@ -187,7 +241,6 @@ class DatabaseHelper {
   }
 
   Future<void> close() async {
-    final db = await instance.database;
-    db.close();
+    await (await database).close();
   }
 }

@@ -1,18 +1,21 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../repositories/task_firestore_repository.dart';
+import '../../features/tasks/data/repositories/task_repository.dart';
 import 'notification_service.dart';
+import '../config/app_timezone.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 /// Serviço para gerenciar notificações semanais automáticas
 class WeeklyNotificationService {
-  static final WeeklyNotificationService _instance = WeeklyNotificationService._internal();
+  static final WeeklyNotificationService _instance =
+      WeeklyNotificationService._internal();
   factory WeeklyNotificationService() => _instance;
   WeeklyNotificationService._internal();
 
-  final TaskFirestoreRepository _taskRepository = TaskFirestoreRepository();
+  final TaskRepository _taskRepository = TaskRepository();
   final NotificationService _notificationService = NotificationService();
-  
+
   Timer? _weeklyTimer;
   bool _isInitialized = false;
 
@@ -22,7 +25,7 @@ class WeeklyNotificationService {
 
     await _notificationService.initialize();
     await _scheduleWeeklyNotifications(userId);
-    
+
     _isInitialized = true;
   }
 
@@ -32,10 +35,12 @@ class WeeklyNotificationService {
     _weeklyTimer?.cancel();
 
     // Calcular próximo domingo às 20h para resumo semanal
-    final now = DateTime.now();
+    final now = AppTimeZone.now();
     final daysUntilSunday = (7 - now.weekday) % 7;
-    final nextSunday = now.add(Duration(days: daysUntilSunday == 0 ? 7 : daysUntilSunday));
-    final nextSummaryTime = DateTime(
+    final nextSunday =
+        now.add(Duration(days: daysUntilSunday == 0 ? 7 : daysUntilSunday));
+    final nextSummaryTime = tz.TZDateTime(
+      tz.local,
       nextSunday.year,
       nextSunday.month,
       nextSunday.day,
@@ -44,7 +49,7 @@ class WeeklyNotificationService {
     );
 
     // Se já passou das 20h de domingo, agendar para próximo domingo
-    final finalSummaryTime = nextSummaryTime.isBefore(now) 
+    final finalSummaryTime = nextSummaryTime.isBefore(now)
         ? nextSummaryTime.add(const Duration(days: 7))
         : nextSummaryTime;
 
@@ -69,9 +74,9 @@ class WeeklyNotificationService {
   Future<void> _sendWeeklySummary(String userId) async {
     try {
       // Calcular início da semana (segunda-feira)
-      final now = DateTime.now();
+      final now = AppTimeZone.now();
       final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-      final mondayStart = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+      final mondayStart = AppTimeZone.dayStart(startOfWeek);
 
       // Obter estatísticas da semana
       final stats = await _taskRepository.getWeeklyStats(userId, mondayStart);
@@ -85,9 +90,9 @@ class WeeklyNotificationService {
       // Salvar última execução
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('last_weekly_notification', now.toIso8601String());
-
     } catch (e) {
-      developer.log('Erro ao enviar resumo semanal: $e', name: 'WeeklyNotificationService');
+      developer.log('Erro ao enviar resumo semanal: $e',
+          name: 'WeeklyNotificationService');
     }
   }
 
@@ -96,7 +101,7 @@ class WeeklyNotificationService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final lastNotificationStr = prefs.getString('last_weekly_notification');
-      
+
       if (lastNotificationStr == null) {
         // Primeira vez - agendar notificações
         await _scheduleWeeklyNotifications(userId);
@@ -104,7 +109,7 @@ class WeeklyNotificationService {
       }
 
       final lastNotification = DateTime.parse(lastNotificationStr);
-      final now = DateTime.now();
+      final now = AppTimeZone.now();
       final daysSinceLastNotification = now.difference(lastNotification).inDays;
 
       // Se passou mais de 7 dias, enviar notificação perdida
@@ -112,7 +117,8 @@ class WeeklyNotificationService {
         await _sendWeeklySummary(userId);
       }
     } catch (e) {
-      developer.log('Erro ao verificar notificações perdidas: $e', name: 'WeeklyNotificationService');
+      developer.log('Erro ao verificar notificações perdidas: $e',
+          name: 'WeeklyNotificationService');
     }
   }
 
@@ -136,11 +142,13 @@ class WeeklyNotificationService {
 
   /// Obter próxima data de notificação semanal
   DateTime getNextWeeklyNotificationDate() {
-    final now = DateTime.now();
+    final now = AppTimeZone.now();
     final daysUntilSunday = (7 - now.weekday) % 7;
-    final nextSunday = now.add(Duration(days: daysUntilSunday == 0 ? 7 : daysUntilSunday));
-    
-    return DateTime(
+    final nextSunday =
+        now.add(Duration(days: daysUntilSunday == 0 ? 7 : daysUntilSunday));
+
+    return tz.TZDateTime(
+      tz.local,
       nextSunday.year,
       nextSunday.month,
       nextSunday.day,

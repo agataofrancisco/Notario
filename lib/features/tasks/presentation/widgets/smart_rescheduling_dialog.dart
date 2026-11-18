@@ -18,10 +18,15 @@ class SmartReschedulingDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final podeReagendar = validationResult['podeReagendar'] as bool? ?? false;
-    final tarefasParaMover = validationResult['tarefasParaMover'] as List<dynamic>? ?? [];
-    final reagendamentoSugerido = validationResult['reagendamentoSugerido'] as List<Map<String, dynamic>>? ?? [];
-    final diasAlternativos = validationResult['diasAlternativos'] as List<DateTime>? ?? [];
+    final tarefasParaMover =
+        validationResult['tarefasParaMover'] as List<dynamic>? ?? [];
+    final reagendamentoSugerido = validationResult['reagendamentoSugerido']
+            as List<Map<String, dynamic>>? ??
+        [];
+    final diasAlternativos =
+        validationResult['diasAlternativos'] as List<DateTime>? ?? [];
     final tempoLiberado = validationResult['tempoLiberado'] as int? ?? 0;
 
     return AlertDialog(
@@ -29,7 +34,7 @@ class SmartReschedulingDialog extends StatelessWidget {
         children: [
           Icon(
             podeReagendar ? Icons.schedule : Icons.warning,
-            color: podeReagendar ? Colors.orange : Colors.red,
+            color: podeReagendar ? const Color(0xFF946200) : scheme.error,
           ),
           const SizedBox(width: 8),
           const Text('Reagendamento Inteligente'),
@@ -44,16 +49,19 @@ class SmartReschedulingDialog extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: podeReagendar ? Colors.orange.shade50 : Colors.red.shade50,
+                color: (podeReagendar ? const Color(0xFF946200) : scheme.error)
+                    .withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: podeReagendar ? Colors.orange.shade200 : Colors.red.shade200,
+                  color:
+                      (podeReagendar ? const Color(0xFF946200) : scheme.error)
+                          .withValues(alpha: 0.35),
                 ),
               ),
               child: Text(
                 validationResult['mensagem'] as String,
                 style: TextStyle(
-                  color: podeReagendar ? Colors.orange.shade800 : Colors.red.shade800,
+                  color: podeReagendar ? const Color(0xFF946200) : scheme.error,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -69,8 +77,8 @@ class SmartReschedulingDialog extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              ...tarefasParaMover.map((tarefa) => _buildTaskToMoveCard(tarefa)),
-              
+              ...tarefasParaMover
+                  .map((tarefa) => _buildTaskToMoveCard(context, tarefa)),
               if (reagendamentoSugerido.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 const Text(
@@ -81,7 +89,8 @@ class SmartReschedulingDialog extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                ...reagendamentoSugerido.map((sugestao) => _buildReschedulingSuggestion(sugestao)),
+                ...reagendamentoSugerido.map((sugestao) =>
+                    _buildReschedulingSuggestion(context, sugestao)),
               ],
             ],
 
@@ -97,10 +106,13 @@ class SmartReschedulingDialog extends StatelessWidget {
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
-                children: diasAlternativos.map((dia) => Chip(
-                  label: Text(DateFormat('dd/MM (EEE)', 'pt_PT').format(dia)),
-                  backgroundColor: Colors.green.shade100,
-                )).toList(),
+                children: diasAlternativos
+                    .map((dia) => Chip(
+                          label: Text(
+                              DateFormat('dd/MM (EEE)', 'pt_PT').format(dia)),
+                          backgroundColor: scheme.tertiaryContainer,
+                        ))
+                    .toList(),
               ),
             ],
           ],
@@ -111,7 +123,6 @@ class SmartReschedulingDialog extends StatelessWidget {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancelar'),
         ),
-        
         if (podeReagendar && reagendamentoSugerido.isNotEmpty)
           BlocConsumer<TaskBloc, TaskState>(
             listener: (context, state) {
@@ -120,7 +131,6 @@ class SmartReschedulingDialog extends StatelessWidget {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(state.mensagem),
-                    backgroundColor: state.sucesso ? Colors.green : Colors.red,
                   ),
                 );
                 if (state.sucesso) {
@@ -131,19 +141,21 @@ class SmartReschedulingDialog extends StatelessWidget {
             builder: (context, state) {
               final isLoading = state is TaskLoading;
               return ElevatedButton(
-                onPressed: isLoading ? null : () {
-                  context.read<TaskBloc>().add(
-                    TaskExecuteReschedulingRequested(
-                      userId: userId,
-                      reagendamentoSugerido: reagendamentoSugerido,
-                    ),
-                  );
-                },
+                onPressed: isLoading
+                    ? null
+                    : () {
+                        context.read<TaskBloc>().add(
+                              TaskExecuteReschedulingRequested(
+                                userId: userId,
+                                reagendamentoSugerido: reagendamentoSugerido,
+                              ),
+                            );
+                      },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
+                  backgroundColor: scheme.primary,
+                  foregroundColor: scheme.onPrimary,
                 ),
-                child: isLoading 
+                child: isLoading
                     ? const SizedBox(
                         width: 16,
                         height: 16,
@@ -157,7 +169,8 @@ class SmartReschedulingDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildTaskToMoveCard(Map<String, dynamic> tarefa) {
+  Widget _buildTaskToMoveCard(
+      BuildContext context, Map<String, dynamic> tarefa) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
@@ -166,7 +179,7 @@ class SmartReschedulingDialog extends StatelessWidget {
           children: [
             Icon(
               Icons.move_down,
-              color: Colors.orange.shade600,
+              color: Theme.of(context).colorScheme.primary,
               size: 20,
             ),
             const SizedBox(width: 8),
@@ -181,7 +194,7 @@ class SmartReschedulingDialog extends StatelessWidget {
                   Text(
                     '${_formatTempo(tarefa['duracaoMinutos'] as int)} • ${tarefa['prioridade']}',
                     style: TextStyle(
-                      color: Colors.grey.shade600,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 12,
                     ),
                   ),
@@ -194,13 +207,15 @@ class SmartReschedulingDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildReschedulingSuggestion(Map<String, dynamic> sugestao) {
+  Widget _buildReschedulingSuggestion(
+      BuildContext context, Map<String, dynamic> sugestao) {
     final dataAtual = DateTime.parse(sugestao['dataAtual'] as String);
     final dataSugerida = DateTime.parse(sugestao['dataSugerida'] as String);
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      color: Colors.blue.shade50,
+      color:
+          Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -213,12 +228,13 @@ class SmartReschedulingDialog extends StatelessWidget {
             const SizedBox(height: 4),
             Row(
               children: [
-                Icon(Icons.arrow_forward, size: 16, color: Colors.blue.shade600),
+                Icon(Icons.arrow_forward,
+                    size: 16, color: Theme.of(context).colorScheme.primary),
                 const SizedBox(width: 4),
                 Text(
                   'De ${DateFormat('dd/MM').format(dataAtual)} para ${DateFormat('dd/MM').format(dataSugerida)}',
                   style: TextStyle(
-                    color: Colors.blue.shade700,
+                    color: Theme.of(context).colorScheme.primary,
                     fontSize: 12,
                   ),
                 ),

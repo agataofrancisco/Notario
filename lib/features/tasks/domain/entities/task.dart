@@ -1,3 +1,5 @@
+import '../../../../core/config/app_timezone.dart';
+
 enum Prioridade {
   baixa,
   media,
@@ -85,6 +87,7 @@ class Task {
   final DateTime criadoEm;
   final DateTime atualizadoEm;
   final DateTime? concluidoEm;
+  final DateTime? deadline;
   final SyncStatus syncStatus;
   final bool googleCalendarSynced;
 
@@ -113,6 +116,7 @@ class Task {
     required this.criadoEm,
     required this.atualizadoEm,
     this.concluidoEm,
+    this.deadline,
     this.syncStatus = SyncStatus.synced,
     this.googleCalendarSynced = false,
     this.remoteType = 'local',
@@ -120,12 +124,12 @@ class Task {
 
   factory Task.fromJson(Map<String, dynamic> json) {
     DateTime parseDateTime(dynamic value) {
-      if (value == null) return DateTime.now();
+      if (value == null) return AppTimeZone.now();
       if (value is String) return DateTime.parse(value);
       try {
         return (value as dynamic).toDate();
       } catch (e) {
-        return DateTime.now();
+        return AppTimeZone.now();
       }
     }
 
@@ -156,6 +160,7 @@ class Task {
       concluidoEm: json['concluidoEm'] != null || json['concluido_em'] != null
           ? parseDateTime(json['concluidoEm'] ?? json['concluido_em'])
           : null,
+      deadline: _parseDateTimeNullable(json['deadline']),
       syncStatus: SyncStatus.fromJson(
           json['syncStatus'] ?? json['sync_status'] ?? 'synced'),
       googleCalendarSynced: json['googleCalendarSynced'] ??
@@ -188,6 +193,7 @@ class Task {
       'criadoEm': criadoEm,
       'atualizadoEm': atualizadoEm,
       'concluidoEm': concluidoEm,
+      'deadline': deadline,
       'googleCalendarSynced': googleCalendarSynced,
       'remoteType': remoteType,
     };
@@ -244,6 +250,7 @@ class Task {
       atualizadoEm: _parseDateTime(map['atualizado_em'] ?? map['atualizadoEm']),
       concluidoEm:
           _parseDateTimeNullable(map['concluido_em'] ?? map['concluidoEm']),
+      deadline: _parseDateTimeNullable(map['deadline']),
       syncStatus: SyncStatus.fromJson(
           map['sync_status'] ?? map['syncStatus'] ?? 'synced'),
       googleCalendarSynced: (map['googleCalendarSynced'] == true) ||
@@ -278,6 +285,7 @@ class Task {
       'criado_em': criadoEm.toUtc().toIso8601String(),
       'atualizado_em': atualizadoEm.toUtc().toIso8601String(),
       'concluido_em': concluidoEm?.toUtc().toIso8601String(),
+      'deadline': deadline?.toUtc().toIso8601String(),
       'sync_status': syncStatus.toJson(),
       'remote_type': remoteType,
     };
@@ -304,6 +312,8 @@ class Task {
     DateTime? criadoEm,
     DateTime? atualizadoEm,
     DateTime? concluidoEm,
+    DateTime? deadline,
+    bool clearDeadline = false,
     SyncStatus? syncStatus,
     bool? googleCalendarSynced,
     String? remoteType,
@@ -329,6 +339,7 @@ class Task {
       criadoEm: criadoEm ?? this.criadoEm,
       atualizadoEm: atualizadoEm ?? this.atualizadoEm,
       concluidoEm: concluidoEm ?? this.concluidoEm,
+      deadline: clearDeadline ? null : (deadline ?? this.deadline),
       syncStatus: syncStatus ?? this.syncStatus,
       googleCalendarSynced: googleCalendarSynced ?? this.googleCalendarSynced,
       remoteType: remoteType ?? this.remoteType,
@@ -343,12 +354,12 @@ class Task {
 
   bool get isAtrasada {
     if (estado != EstadoTarefa.pendente) return false;
-    return DateTime.now().isAfter(dataInicio);
+    return AppTimeZone.now().isAfter(dataInicio);
   }
 
   Duration get duracaoRestante {
     if (estado != EstadoTarefa.emExecucao) return Duration.zero;
-    final agora = DateTime.now();
+    final agora = AppTimeZone.now();
     if (agora.isAfter(dataFim)) return Duration.zero;
     return dataFim.difference(agora);
   }

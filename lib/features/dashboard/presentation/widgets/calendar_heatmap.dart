@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/services/statistics_service.dart';
+import '../../../../core/config/app_timezone.dart';
 
 class CalendarHeatmap extends StatelessWidget {
   final List<DailyStats> weeklyStats;
@@ -25,7 +26,7 @@ class CalendarHeatmap extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 2,
+      elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -43,68 +44,79 @@ class CalendarHeatmap extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: weeklyStats.map((stats) {
-                final isToday = stats.date.day == DateTime.now().day &&
-                    stats.date.month == DateTime.now().month &&
-                    stats.date.year == DateTime.now().year;
+                final today = AppTimeZone.now();
+                final day = AppTimeZone.inAppZone(stats.date);
+                final isToday = day.day == today.day &&
+                    day.month == today.month &&
+                    day.year == today.year;
 
                 return Expanded(
-                  child: GestureDetector(
-                    onTap: () => onDayTap?.call(stats.date),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Column(
-                        children: [
-                          Text(
-                            DateFormat('EEE', 'pt_PT')
-                                .format(stats.date)
-                                .substring(0, 1)
-                                .toUpperCase(),
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight:
-                                  isToday ? FontWeight.bold : FontWeight.normal,
-                              color: isToday
-                                  ? Theme.of(context).primaryColor
-                                  : Colors.grey[600],
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: _getColorForScore(stats.score),
-                              borderRadius: BorderRadius.circular(8),
-                              border: isToday
-                                  ? Border.all(
-                                      color: Theme.of(context).primaryColor,
-                                      width: 2,
-                                    )
-                                  : null,
-                            ),
-                            child: Center(
-                              child: Text(
-                                stats.date.day.toString(),
+                  child: Semantics(
+                    button: onDayTap != null,
+                    label: '${DateFormat('EEEE d MMMM', 'pt_PT').format(day)}, '
+                        '${stats.hasData ? '${stats.completedTasks} de ${stats.totalTasks} concluídas' : 'sem tarefas'}',
+                    child: ExcludeSemantics(
+                      child: InkWell(
+                        onTap: () => onDayTap?.call(stats.date),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Column(
+                            children: [
+                              Text(
+                                DateFormat('EEE', 'pt_PT')
+                                    .format(day)
+                                    .substring(0, 1)
+                                    .toUpperCase(),
                                 style: GoogleFonts.inter(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: stats.hasData
-                                      ? Colors.white
+                                  fontSize: 12,
+                                  fontWeight: isToday
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                  color: isToday
+                                      ? Theme.of(context).primaryColor
                                       : Colors.grey[600],
                                 ),
                               ),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          if (stats.hasData)
-                            Text(
-                              '${stats.completedTasks}/${stats.totalTasks}',
-                              style: GoogleFonts.inter(
-                                fontSize: 10,
-                                color: Colors.grey[600],
+                              const SizedBox(height: 8),
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: _getColorForScore(stats.score),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: isToday
+                                      ? Border.all(
+                                          color: Theme.of(context).primaryColor,
+                                          width: 2,
+                                        )
+                                      : null,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    stats.date.day.toString(),
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: stats.hasData
+                                          ? const Color(0xFF25252A)
+                                          : Colors.grey[600],
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                        ],
+                              const SizedBox(height: 4),
+                              if (stats.hasData)
+                                Text(
+                                  '${stats.completedTasks}/${stats.totalTasks}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -120,15 +132,14 @@ class CalendarHeatmap extends StatelessWidget {
   }
 
   Widget _buildLegend() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 10,
+      runSpacing: 8,
       children: [
         _buildLegendItem('Excelente', Colors.green.shade400),
-        const SizedBox(width: 8),
         _buildLegendItem('Bom', Colors.lightGreen.shade400),
-        const SizedBox(width: 8),
         _buildLegendItem('Regular', Colors.orange.shade300),
-        const SizedBox(width: 8),
         _buildLegendItem('Fraco', Colors.red.shade300),
       ],
     );
